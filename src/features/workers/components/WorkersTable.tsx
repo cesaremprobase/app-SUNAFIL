@@ -16,7 +16,7 @@ function WorkerActions({ worker }: { worker: Worker }) {
   const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDelete = async () => {
-    if (confirm('¿Está seguro de eliminar a este trabajador?')) {
+    if (worker.id && confirm('¿Está seguro de eliminar a este trabajador?')) {
       setIsDeleting(true)
       await deleteWorker(worker.id)
       setIsDeleting(false)

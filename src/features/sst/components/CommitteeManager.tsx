@@ -64,7 +64,7 @@ export function CommitteeManager({ workers, committeeMembers }: { workers: Worke
                   </SelectTrigger>
                   <SelectContent>
                     {activeWorkers.map(w => (
-                      <SelectItem key={w.id} value={w.id}>
+                      <SelectItem key={w.id || w.document_number} value={w.id || ''}>
                         {w.first_name} {w.last_name}
                       </SelectItem>
                     ))}
@@ -144,7 +144,7 @@ export function CommitteeManager({ workers, committeeMembers }: { workers: Worke
                   variant="ghost" 
                   size="sm"
                   className="text-red-600 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => deactivateCommitteeRole(member.id)}
+                  onClick={() => member.id && deactivateCommitteeRole(member.id)}
                   title="Revocar cargo"
                 >
                   <UserX className="w-4 h-4" />

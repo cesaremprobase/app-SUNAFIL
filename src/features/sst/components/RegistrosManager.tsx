@@ -214,15 +214,15 @@ function RecordEditModal({ record, workers, onSave }: RecordEditModalProps) {
                             type="file" 
                             accept=".pdf" 
                             className="hidden" 
-                            ref={el => { workerFileInputRefs.current[worker.id] = el }}
-                            onChange={(e) => handleIndividualFileChange(worker.id, e)} 
+                            ref={el => { if (worker.id) workerFileInputRefs.current[worker.id] = el }}
+                            onChange={(e) => worker.id && handleIndividualFileChange(worker.id, e)} 
                           />
                           <Button 
                             variant="outline" 
                             size="sm" 
                             className="h-8 gap-1.5"
                             disabled={uploadingWorkerId === worker.id}
-                            onClick={() => workerFileInputRefs.current[worker.id]?.click()}
+                            onClick={() => worker.id && workerFileInputRefs.current[worker.id]?.click()}
                           >
                             {uploadingWorkerId === worker.id ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />

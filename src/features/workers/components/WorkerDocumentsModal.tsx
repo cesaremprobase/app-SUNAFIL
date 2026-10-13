@@ -24,7 +24,7 @@ export function WorkerDocumentsModal({ worker, open, onOpenChange }: WorkerDocum
 
   // Fetch docs when modal opens
   React.useEffect(() => {
-    if (open && worker) {
+    if (open && worker?.id) {
       setIsLoading(true)
       getWorkerDocuments(worker.id).then(docs => {
         setDocuments(docs)
@@ -33,7 +33,7 @@ export function WorkerDocumentsModal({ worker, open, onOpenChange }: WorkerDocum
     }
   }, [open, worker])
 
-  if (!worker) return null
+  if (!worker || !worker.id) return null
 
   const handleUploadClick = () => {
     fileInputRef.current?.click()
