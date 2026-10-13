@@ -2,15 +2,15 @@ import type { SstRecord } from '../types'
 
 export function SstRecordsList({ records = [] }: { records?: SstRecord[] }) {
   // If no records passed, show a fallback or empty state, but for now we'll just map what's passed
-  const displayRecords = records.length > 0 ? records : [
-    { id: 1, name: 'Accidentes e Incidentes', status: 'pending' },
-    { id: 2, name: 'Exámenes Médicos Ocupacionales (EMOs)', status: 'valid' },
-    { id: 3, name: 'Inspecciones Internas', status: 'valid' },
-    { id: 4, name: 'Estadísticas SST', status: 'valid' },
-    { id: 5, name: 'Equipos de Protección Personal (EPPs)', status: 'pending' },
-    { id: 6, name: 'Inducciones y Capacitaciones', status: 'valid' },
-    { id: 7, name: 'Auditorías', status: 'pending' },
-    { id: 8, name: 'Monitoreos Ocupacionales', status: 'valid' }
+  const displayRecords: SstRecord[] = records.length > 0 ? records : [
+    { id: '1', name: 'Accidentes e Incidentes', status: 'pending' },
+    { id: '2', name: 'Exámenes Médicos Ocupacionales (EMOs)', status: 'valid' },
+    { id: '3', name: 'Inspecciones Internas', status: 'valid' },
+    { id: '4', name: 'Estadísticas SST', status: 'valid' },
+    { id: '5', name: 'Equipos de Protección Personal (EPPs)', status: 'pending' },
+    { id: '6', name: 'Inducciones y Capacitaciones', status: 'valid' },
+    { id: '7', name: 'Auditorías', status: 'pending' },
+    { id: '8', name: 'Monitoreos Ocupacionales', status: 'valid' }
   ]
 
   return (
