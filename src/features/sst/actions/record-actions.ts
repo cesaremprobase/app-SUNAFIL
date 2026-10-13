@@ -66,7 +66,8 @@ export async function getSstRecords() {
   return processedRecords
 }
 
-export async function updateSstRecord(recordId: string, payload: any) {
+export async function updateSstRecord(recordId: string | undefined, payload: any) {
+  if (!recordId) throw new Error('Identificador de registro no válido')
   const supabase = await createClient()
   
   const { data, error } = await supabase

@@ -83,6 +83,10 @@ function RecordEditModal({ record, workers, onSave }: RecordEditModalProps) {
   }
 
   const handleGeneralSave = async () => {
+    if (!record.id) {
+      toast.error('Identificador de registro no válido')
+      return
+    }
     setIsSaving(true)
     try {
       const payload = { status, next_due_date: date, notes, document_name: docName, document_path: docPath }
@@ -198,7 +202,7 @@ function RecordEditModal({ record, workers, onSave }: RecordEditModalProps) {
                             <Download className="w-4 h-4" />
                           </a>
                           <button 
-                            onClick={() => handleIndividualDelete(doc.id!, doc.file_path)}
+                            onClick={() => doc.id && handleIndividualDelete(doc.id, doc.file_path)}
                             className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
                             title="Eliminar"
                           >
@@ -250,7 +254,7 @@ function RecordEditModal({ record, workers, onSave }: RecordEditModalProps) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Estado del Registro</Label>
-                <Select value={status} onValueChange={setStatus}>
+                <Select value={status} onValueChange={(val: any) => setStatus(val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccione estado" />
                   </SelectTrigger>
