@@ -126,7 +126,7 @@ export async function getWorkerLegajosDossier(): Promise<WorkerLegajoSummary[]> 
     .from('worker_documents')
     .select('*')
 
-  const docsByWorker: Record<string, typeof documents> = {}
+  const docsByWorker: Record<string, any[]> = {}
   documents?.forEach(doc => {
     if (!docsByWorker[doc.worker_id]) {
       docsByWorker[doc.worker_id] = []
