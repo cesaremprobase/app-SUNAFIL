@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { 
   sendTelegramMessage, 
-  processTelegramUpload 
+  answerTelegramCallback,
+  processTelegramUpload,
+  getMainReplyKeyboard,
+  getMainInlineKeyboard,
+  pendingUploadsByChat,
+  downloadTelegramFile,
+  saveWorkerDocumentFile,
+  extractGoogleDriveId,
+  downloadGoogleDriveFile,
+  getAppUrl
 } from '@/features/telegram/services/telegram-service'
-import { getDossierSummary } from '@/features/sst/services/dossier-service'
+import { getDossierSummary, ingestDocument } from '@/features/sst/services/dossier-service'
+import { createClient } from '@/lib/supabase/server'
 
 export async function GET() {
   return NextResponse.json({
     status: 'online',
-    service: 'SUNAFIL Compliance Telegram Bot Webhook',
+    service: 'SUNAFIL Compliance Telegram Bot & Mini App Webhook',
     timestamp: new Date().toISOString()
   })
 }
@@ -16,8 +26,119 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const update = await req.json()
-    const message = update.message || update.edited_message
 
+    // 1. MANEJO DE BOTONES INTERACTIVOS (Callback Queries)
+    if (update.callback_query) {
+      const cb = update.callback_query
+      const chatId = cb.message.chat.id
+      const data = cb.data as string
+      await answerTelegramCallback(cb.id)
+
+      if (data === 'action:estado') {
+        const summary = await getDossierSummary()
+        await sendTelegramMessage(
+          chatId,
+          `📊 *Estado Actual del Expediente SUNAFIL*\n\n` +
+          `🎯 *Preparación Global:* ${summary.overallReadiness}%\n` +
+          `📁 *Archivos Digitalizados:* ${summary.totalDigitalizedDocuments} / ${summary.totalRequiredDocuments}\n` +
+          `⏳ *Documentos Físicos Pendientes:* ${summary.totalPendingPhysicalDocuments}\n\n` +
+          `👥 *Legajos Completos:* ${summary.workerLegajosCount.completeLegajos} de ${summary.workerLegajosCount.totalWorkers} trabajadores.`,
+          getMainInlineKeyboard()
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      if (data === 'action:trabajadores') {
+        const supabase = await createClient()
+        const { data: workers } = await supabase
+          .from('workers')
+          .select('document_number, first_name, last_name, job_title')
+          .order('last_name', { ascending: true })
+          .limit(20)
+
+        const list = (workers || []).map((w, i) => `${i + 1}. \`${w.document_number}\` - ${w.last_name}, ${w.first_name} _(${w.job_title})_`).join('\n')
+        
+        await sendTelegramMessage(
+          chatId,
+          `👥 *Nómina de Trabajadores Registrados (Mostrando primeros 20):*\n\n` +
+          (list || 'No hay trabajadores cargados aún.') +
+          `\n\n💡 *Para subir un documento:* Envía la foto o PDF agregando el DNI en el mensaje (ej: \`42788318 emo\`).`,
+          getMainInlineKeyboard()
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      if (data === 'action:drive_help') {
+        await sendTelegramMessage(
+          chatId,
+          `📁 *¿Cómo subir desde Google Drive con Máxima Calidad?*\n\n` +
+          `Tienes 2 opciones muy rápidas:\n\n` +
+          `1️⃣ *Compartir directo al Bot (Recomendado):*\n` +
+          `   • En tu celular, abre la app *Google Drive*.\n` +
+          `   • Toca los 3 puntos \`...\` del documento escaneado y dale a *Enviar una copia* o *Compartir*.\n` +
+          `   • Elige *Telegram* y selecciona este bot.\n` +
+          `   • En el pie de foto, pon el DNI y tipo (ej: \`42788318 emo\`). ¡Llega como PDF sin perder nada de calidad!\n\n` +
+          `2️⃣ *Enviar enlace público de Drive:*\n` +
+          `   • Si tienes un archivo en Google Drive, copia su enlace compartido y pégalo aquí en el chat indicando el DNI.`,
+          getMainInlineKeyboard()
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      if (data === 'action:scan_help') {
+        await sendTelegramMessage(
+          chatId,
+          `📸 *Guía para Escanear Documentos con Calidad SUNAFIL*\n\n` +
+          `Para evitar que SUNAFIL observe firmas o sellos borrosos:\n\n` +
+          `1. *Usa Google Drive / Lens:* En la app de Google Drive pulsa el botón flotante con ícono de cámara \`+\` (*Escanear*). Corrige la perspectiva y quita sombras automáticamente.\n` +
+          `2. *Buena Iluminación:* Evita sombras directas de tu mano o celular sobre las firmas.\n` +
+          `3. *Papel Plano:* Coloca la hoja sobre una superficie plana y oscura para que el escáner recorte los bordes solos.\n` +
+          `4. *Guardar como PDF:* Siempre que puedas, comparte el escaneo como PDF para legibilidad profesional.`,
+          getMainInlineKeyboard()
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      if (data.startsWith('set_doc:')) {
+        const chosenType = data.replace('set_doc:', '')
+        const pending = pendingUploadsByChat.get(chatId)
+        if (!pending) {
+          await sendTelegramMessage(
+            chatId, 
+            '⚠️ No hay ninguna foto o documento pendiente. Por favor, envía primero la foto o el PDF.'
+          )
+          return NextResponse.json({ ok: true })
+        }
+
+        pending.docType = chosenType
+        pendingUploadsByChat.set(chatId, pending)
+
+        if (chosenType === 'empresa') {
+          await sendTelegramMessage(
+            chatId,
+            `🏢 Has seleccionado *Documento de Empresa*.\n\n` +
+            `Por favor, escribe el código o nombre del requisito (ej: \`empresa iperc\`, \`empresa risst\`, \`empresa politica\`, o \`empresa plan\`):`
+          )
+        } else {
+          const typeNames: Record<string, string> = {
+            emos: 'Certificado de Aptitud Médica (EMO)',
+            risst: 'Cargo firmado de Entrega de RISST',
+            epps: 'Cargo de Entrega de EPP',
+            capacitaciones: 'Constancia de Capacitación SST'
+          }
+          await sendTelegramMessage(
+            chatId,
+            `📄 Tipo seleccionado: *${typeNames[chosenType] || chosenType}*.\n\n` +
+            `👉 *Ahora escribe el DNI del trabajador* (8 dígitos) para guardarlo en su legajo:`
+          )
+        }
+        return NextResponse.json({ ok: true })
+      }
+
+      return NextResponse.json({ ok: true })
+    }
+
+    const message = update.message || update.edited_message
     if (!message) {
       return NextResponse.json({ ok: true })
     }
@@ -26,30 +147,26 @@ export async function POST(req: NextRequest) {
     const text = message.text?.trim()
     const caption = message.caption?.trim() || ''
 
-    // Manejo de comandos de texto
+    // 2. MANEJO DE COMANDOS DE TEXTO
     if (text) {
       if (text.startsWith('/start') || text.startsWith('/help') || text.startsWith('/ayuda')) {
         await sendTelegramMessage(
           chatId,
-          `🤖 *Bot de Digitalización SGSST - SUNAFIL*\n\n` +
-          `Este bot te permite cargar directamente las fotos o PDFs de los documentos físicos firmados.\n\n` +
-          `📌 *¿Cómo subir documentos?*\n` +
-          `1. Toma una foto clara o adjunta un PDF.\n` +
-          `2. En el *pie de foto / mensaje*, indica el DNI y el tipo de documento:\n` +
-          `   • \`42788318 risst\` _(Cargo de entrega de RISST)_\n` +
-          `   • \`42788318 emo\` _(Certificado médico de aptitud)_\n` +
-          `   • \`42788318 epp\` _(Cargo de entrega de EPP)_\n` +
-          `   • \`42788318 curso\` _(Capacitación / Inducción)_\n\n` +
-          `🏢 *Para documentos de la empresa:*\n` +
-          `   • \`empresa risst\`, \`empresa iperc\`, \`empresa politica\`\n\n` +
-          `📊 *Comandos de consulta:*\n` +
-          `• \`/estado\` - Ver avance del expediente SUNAFIL\n` +
-          `• \`/buscar [DNI]\` - Consultar qué documentos le faltan a un trabajador`
+          `👋 *¡Hola! Bienvenido al Asistente SGSST - SUNAFIL Pro*\n\n` +
+          `Este bot está conectado en tiempo real con tu plataforma. Puedes digitalizar documentos físicos, revisar el avance del expediente y abrir la **Mini App** interactiva.\n\n` +
+          `👇 *Usa los botones de abajo para navegar o toca "Abrir App SUNAFIL" para usar la plataforma aquí mismo:*`,
+          getMainReplyKeyboard()
+        )
+        // También enviar mensaje con botones inline
+        await sendTelegramMessage(
+          chatId,
+          `🚀 *Acciones Rápidas:*`,
+          getMainInlineKeyboard()
         )
         return NextResponse.json({ ok: true })
       }
 
-      if (text.startsWith('/estado')) {
+      if (text === '📊 Estado del Expediente' || text.startsWith('/estado')) {
         const summary = await getDossierSummary()
         await sendTelegramMessage(
           chatId,
@@ -57,21 +174,174 @@ export async function POST(req: NextRequest) {
           `🎯 *Preparación Global:* ${summary.overallReadiness}%\n` +
           `📁 *Archivos Digitalizados:* ${summary.totalDigitalizedDocuments} / ${summary.totalRequiredDocuments}\n` +
           `⏳ *Documentos Físicos Pendientes:* ${summary.totalPendingPhysicalDocuments}\n\n` +
-          `👥 *Legajos Completos:* ${summary.workerLegajosCount.completeLegajos} de ${summary.workerLegajosCount.totalWorkers} trabajadores.`
+          `👥 *Legajos Completos:* ${summary.workerLegajosCount.completeLegajos} de ${summary.workerLegajosCount.totalWorkers} trabajadores.`,
+          getMainInlineKeyboard()
         )
+        return NextResponse.json({ ok: true })
+      }
+
+      if (text === '👥 Nómina (33 Trabajadores)' || text.startsWith('/trabajadores')) {
+        const supabase = await createClient()
+        const { data: workers } = await supabase
+          .from('workers')
+          .select('document_number, first_name, last_name, job_title')
+          .order('last_name', { ascending: true })
+          .limit(20)
+
+        const list = (workers || []).map((w, i) => `${i + 1}. \`${w.document_number}\` - ${w.last_name}, ${w.first_name}`).join('\n')
+        
+        await sendTelegramMessage(
+          chatId,
+          `👥 *Nómina Oficial (Primeros 20 trabajadores):*\n\n` +
+          (list || 'No hay trabajadores registrados en la base de datos.') +
+          `\n\n📌 Para subir su documento, envía la foto con su DNI (ej: \`42788318 emo\`).`,
+          getMainInlineKeyboard()
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      if (text === '📁 Subir desde Google Drive') {
+        await sendTelegramMessage(
+          chatId,
+          `📁 *Integración con Google Drive*\n\n` +
+          `Puedes compartir cualquier escaneo desde Google Drive:\n\n` +
+          `• *Desde la app de Drive:* Abre el archivo escaneado > toca los 3 puntos > *Compartir* o *Enviar copia* > Selecciona este bot.\n` +
+          `• *O pega el enlace de Drive aquí:* Si tienes un link de Google Drive, escríbelo con el DNI del trabajador (ej: \`https://drive.google.com/file/d/... 42788318 emo\`).`,
+          getMainInlineKeyboard()
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      if (text === '📸 Guía de Escáner HD') {
+        await sendTelegramMessage(
+          chatId,
+          `📸 *Recomendaciones para Escaneo de Alta Calidad*\n\n` +
+          `1. Utiliza la función **Escanear** de Google Drive (ícono de cámara) o Google Lens.\n` +
+          `2. Coloca el documento en un fondo contrastante (mesa oscura).\n` +
+          `3. Verifica que la firma del trabajador y la fecha sean 100% legibles.\n` +
+          `4. Envía el archivo como documento/PDF a este chat.`,
+          getMainInlineKeyboard()
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      // Detección de enlace de Google Drive
+      const driveId = extractGoogleDriveId(text)
+      if (driveId) {
+        await sendTelegramMessage(chatId, `⏳ Detectado enlace de Google Drive. Descargando archivo...`)
+        const driveFile = await downloadGoogleDriveFile(driveId)
+        if (!driveFile) {
+          await sendTelegramMessage(
+            chatId, 
+            `❌ No se pudo descargar el archivo de Google Drive. Asegúrate de que el enlace tenga permiso de lectura: *"Cualquier persona con el enlace puede leer"*.\n\n` +
+            `💡 *Tip más fácil:* En tu celular, abre el archivo en Google Drive y dale a *Compartir / Enviar copia* directo a Telegram.`
+          )
+          return NextResponse.json({ ok: true })
+        }
+
+        // Buscar si el texto contiene DNI
+        const dniMatch = text.match(/\b\d{8}\b/)
+        if (dniMatch) {
+          const dni = dniMatch[0]
+          const supabase = await createClient()
+          const { data: worker } = await supabase
+            .from('workers')
+            .select('id, first_name, last_name, document_number')
+            .eq('document_number', dni)
+            .maybeSingle()
+
+          if (worker) {
+            let docType = 'risst'
+            if (text.includes('emo') || text.includes('medico')) docType = 'emos'
+            else if (text.includes('epp')) docType = 'epps'
+            else if (text.includes('capa') || text.includes('curso')) docType = 'capacitaciones'
+
+            await saveWorkerDocumentFile({
+              chatId,
+              worker,
+              docType,
+              buffer: driveFile.buffer,
+              fileName: driveFile.fileName,
+              source: 'drive'
+            })
+            return NextResponse.json({ ok: true })
+          }
+        }
+
+        // Si no hay DNI en el texto, guardarlo como pendiente
+        pendingUploadsByChat.set(chatId, {
+          fileId: `drive_${driveId}`,
+          fileName: driveFile.fileName,
+          isPdf: true,
+          timestamp: Date.now()
+        })
+        await sendTelegramMessage(
+          chatId,
+          `✅ Documento descargado desde Google Drive con éxito.\n\n¿A qué corresponde este archivo?`,
+          getMainInlineKeyboard()
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      // Si el texto es un DNI de 8 dígitos y hay una subida pendiente esperando DNI
+      const dniMatch = text.match(/^\b\d{8}\b$/)
+      const pending = pendingUploadsByChat.get(chatId)
+
+      if (dniMatch && pending && pending.docType) {
+        const dni = dniMatch[0]
+        const supabase = await createClient()
+        const { data: worker } = await supabase
+          .from('workers')
+          .select('id, first_name, last_name, document_number')
+          .eq('document_number', dni)
+          .maybeSingle()
+
+        if (!worker) {
+          await sendTelegramMessage(
+            chatId,
+            `❌ *Trabajador no encontrado:* No existe ningún trabajador con el DNI \`${dni}\`.\n\n` +
+            `Por favor verifica el número o consulta la lista con el botón *👥 Nómina (33 Trabajadores)*.`
+          )
+          return NextResponse.json({ ok: true })
+        }
+
+        await sendTelegramMessage(
+          chatId, 
+          `⏳ Asignando documento a *${worker.first_name} ${worker.last_name}*...`
+        )
+
+        const file = await downloadTelegramFile(pending.fileId)
+        if (!file) {
+          await sendTelegramMessage(chatId, `❌ Error descargando archivo desde Telegram.`)
+          pendingUploadsByChat.delete(chatId)
+          return NextResponse.json({ ok: true })
+        }
+
+        const ext = pending.fileName?.split('.').pop() || file.fileName.split('.').pop() || 'jpg'
+        const fileName = pending.fileName || `telegram_${pending.docType}_${worker.document_number}.${ext}`
+
+        await saveWorkerDocumentFile({
+          chatId,
+          worker,
+          docType: pending.docType,
+          buffer: file.buffer,
+          fileName,
+          source: 'telegram'
+        })
+
+        pendingUploadsByChat.delete(chatId)
         return NextResponse.json({ ok: true })
       }
     }
 
-    // Manejo de Fotos (Escaneos desde la cámara del celular)
+    // 3. MANEJO DE FOTOS (Cámara del celular / Escaneo)
     if (message.photo && message.photo.length > 0) {
-      // Telegram envía un array con distintas resoluciones; la última es la más nítida
       const bestPhoto = message.photo[message.photo.length - 1]
       await processTelegramUpload(chatId, bestPhoto.file_id, caption)
       return NextResponse.json({ ok: true })
     }
 
-    // Manejo de Documentos (PDFs o archivos adjuntos sin compresión)
+    // 4. MANEJO DE DOCUMENTOS (PDFs o archivos adjuntos sin compresión)
     if (message.document) {
       await processTelegramUpload(
         chatId, 
@@ -85,7 +355,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (error: any) {
     console.error('Error procesando webhook de Telegram:', error)
-    // Siempre responder 200 a Telegram para evitar reintentos continuos en caso de excepción
     return NextResponse.json({ ok: true, error: error.message })
   }
 }

@@ -97,10 +97,17 @@ export async function uploadAndIngestCompanyDocument(formData: FormData) {
 export async function getDocumentDownloadUrl(filePath: string) {
   const supabase = await createClient()
 
-  // Bucket es público según migración, pero creamos signed URL o public URL para visualización segura
-  const { data } = supabase.storage
+  // Generar URL firmada temporal de 15 minutos (900 seg) para máxima seguridad
+  const { data, error } = await supabase.storage
     .from('sst-documents')
-    .getPublicUrl(filePath)
+    .createSignedUrl(filePath, 900)
 
-  return data.publicUrl
+  if (error || !data?.signedUrl) {
+    const { data: publicData } = supabase.storage
+      .from('sst-documents')
+      .getPublicUrl(filePath)
+    return publicData.publicUrl
+  }
+
+  return data.signedUrl
 }

@@ -1,16 +1,33 @@
 import { Building, Bot, Shield, Bell, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { getUserProfiles, getCurrentUserProfile } from '@/features/auth/actions/user-management-actions'
+import { UserAccessManager } from '@/features/auth/components/UserAccessManager'
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const [users, currentProfile] = await Promise.all([
+    getUserProfiles(),
+    getCurrentUserProfile()
+  ])
+
+  const isAdmin = currentProfile?.role === 'admin' || currentProfile?.email === 'cesarestebandelao@gmail.com'
+
   return (
     <div className="min-h-screen p-6 md:p-8 bg-gray-50/50">
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-950 tracking-tight">Configuración del Sistema SGSST</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Parámetros de la empresa y canales de integración para inspección SUNAFIL
+            Control de accesos corporativos, parámetros de la empresa e integraciones SUNAFIL
           </p>
         </div>
+
+        {/* Panel de Control de Accesos y Aprobación de Usuarios (Solo Admin) */}
+        {isAdmin && (
+          <UserAccessManager 
+            users={users} 
+            currentUserEmail={currentProfile?.email} 
+          />
+        )}
 
         {/* Datos de la Empresa */}
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
@@ -65,22 +82,22 @@ export default function SettingsPage() {
               </div>
             </div>
             <span className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 font-semibold rounded-full border border-blue-200">
-              Próximo Paso
+              Canal Activo
             </span>
           </div>
 
           <div className="space-y-3 text-xs text-gray-600">
             <p>
-              El bot permitirá enviar fotografías legibles o PDFs de:
+              El bot permite enviar fotos legibles o PDFs directo a los legajos de los trabajadores:
             </p>
             <ul className="list-disc pl-5 space-y-1 text-gray-700">
-              <li><strong>Cargos de RISST firmados</strong> por trabajador</li>
-              <li><strong>Constancias de Entrega de EPPs</strong></li>
-              <li><strong>Certificados de Aptitud Médica (EMO)</strong></li>
-              <li><strong>Actas del Comité de SST</strong></li>
+              <li><strong>Cargos de RISST firmados</strong> (ejemplo: <code>42788318 risst</code>)</li>
+              <li><strong>Certificados de Aptitud Médica (EMO)</strong> (ejemplo: <code>42788318 emo</code>)</li>
+              <li><strong>Constancias de Entrega de EPPs</strong> (ejemplo: <code>42788318 epp</code>)</li>
+              <li><strong>Capacitaciones y Actas del Comité</strong></li>
             </ul>
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg font-mono text-[11px] text-gray-600">
-              Webhook Endpoint preparado: <code>/api/telegram/webhook</code>
+              Webhook Endpoint: <code>https://app-sunafil.vercel.app/api/telegram/webhook</code>
             </div>
           </div>
         </div>

@@ -3,7 +3,22 @@ import { ingestDocument } from '@/features/sst/services/dossier-service'
 
 const TELEGRAM_API_URL = 'https://api.telegram.org'
 
-export async function sendTelegramMessage(chatId: number | string, text: string) {
+export interface PendingUpload {
+  fileId: string
+  fileName?: string
+  isPdf: boolean
+  docType?: string
+  timestamp: number
+}
+
+// Estado temporal en memoria para cuando el usuario sube foto/PDF sin pie de foto
+export const pendingUploadsByChat = new Map<number | string, PendingUpload>()
+
+export async function sendTelegramMessage(
+  chatId: number | string, 
+  text: string, 
+  replyMarkup?: any
+) {
   const token = process.env.TELEGRAM_BOT_TOKEN
   if (!token) {
     console.warn('TELEGRAM_BOT_TOKEN no configurado')
@@ -11,17 +26,105 @@ export async function sendTelegramMessage(chatId: number | string, text: string)
   }
 
   try {
+    const payload: any = {
+      chat_id: chatId,
+      text,
+      parse_mode: 'Markdown'
+    }
+    if (replyMarkup) {
+      payload.reply_markup = replyMarkup
+    }
+
     await fetch(`${TELEGRAM_API_URL}/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'Markdown'
-      })
+      body: JSON.stringify(payload)
     })
   } catch (error) {
     console.error('Error enviando mensaje a Telegram:', error)
+  }
+}
+
+export async function answerTelegramCallback(callbackQueryId: string, text?: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token) return
+
+  try {
+    await fetch(`${TELEGRAM_API_URL}/bot${token}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text: text || undefined
+      })
+    })
+  } catch (error) {
+    console.error('Error respondiendo callback de Telegram:', error)
+  }
+}
+
+export function getAppUrl(): string {
+  return process.env.NEXT_PUBLIC_APP_URL || 'https://app-sunafil.vercel.app'
+}
+
+// Teclado persistente en el chat (ReplyKeyboardMarkup)
+export function getMainReplyKeyboard() {
+  const appUrl = getAppUrl()
+  return {
+    keyboard: [
+      [
+        { text: '📱 Abrir App SUNAFIL (Mini App)', web_app: { url: `${appUrl}/expediente` } }
+      ],
+      [
+        { text: '📊 Estado del Expediente' },
+        { text: '👥 Nómina (33 Trabajadores)' }
+      ],
+      [
+        { text: '📁 Subir desde Google Drive' },
+        { text: '📸 Guía de Escáner HD' }
+      ]
+    ],
+    resize_keyboard: true,
+    is_persistent: true
+  }
+}
+
+// Botones en línea para mensajes (InlineKeyboardMarkup)
+export function getMainInlineKeyboard() {
+  const appUrl = getAppUrl()
+  return {
+    inline_keyboard: [
+      [
+        { text: '🚀 Abrir Mini App SGSST (Pantalla Completa)', web_app: { url: `${appUrl}/expediente` } }
+      ],
+      [
+        { text: '📊 Estado Actual', callback_data: 'action:estado' },
+        { text: '👥 Nómina 33', callback_data: 'action:trabajadores' }
+      ],
+      [
+        { text: '📁 Vincular Google Drive', callback_data: 'action:drive_help' },
+        { text: '📸 Guía Escáner HD', callback_data: 'action:scan_help' }
+      ]
+    ]
+  }
+}
+
+// Selector interactivo cuando el usuario sube un archivo sin texto
+export function getDocumentTypeInlineKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '🩺 Certificado Médico (EMO)', callback_data: 'set_doc:emos' },
+        { text: '📋 Cargo de RISST', callback_data: 'set_doc:risst' }
+      ],
+      [
+        { text: '🦺 Entrega de EPP', callback_data: 'set_doc:epps' },
+        { text: '🎓 Capacitación / Inducción', callback_data: 'set_doc:capacitaciones' }
+      ],
+      [
+        { text: '🏢 Documento de Empresa (IPERC / Plan / Política)', callback_data: 'set_doc:empresa' }
+      ]
+    ]
   }
 }
 
@@ -30,7 +133,6 @@ export async function downloadTelegramFile(fileId: string): Promise<{ buffer: Bu
   if (!token) return null
 
   try {
-    // 1. Obtener file_path
     const res = await fetch(`${TELEGRAM_API_URL}/bot${token}/getFile?file_id=${fileId}`)
     const data = await res.json()
     if (!data.ok || !data.result.file_path) {
@@ -41,7 +143,6 @@ export async function downloadTelegramFile(fileId: string): Promise<{ buffer: Bu
     const filePath = data.result.file_path
     const fileUrl = `${TELEGRAM_API_URL}/file/bot${token}/${filePath}`
 
-    // 2. Descargar contenido binario
     const fileRes = await fetch(fileUrl)
     const arrayBuffer = await fileRes.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
@@ -54,6 +155,36 @@ export async function downloadTelegramFile(fileId: string): Promise<{ buffer: Bu
   }
 }
 
+export function extractGoogleDriveId(url: string): string | null {
+  const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
+  if (fileMatch) return fileMatch[1]
+  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+  if (idMatch) return idMatch[1]
+  return null
+}
+
+export async function downloadGoogleDriveFile(driveId: string): Promise<{ buffer: Buffer; fileName: string } | null> {
+  try {
+    const downloadUrl = `https://drive.google.com/uc?export=download&id=${driveId}`
+    const res = await fetch(downloadUrl, { redirect: 'follow' })
+    if (!res.ok) return null
+
+    const arrayBuffer = await res.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    const disposition = res.headers.get('content-disposition') || ''
+    let fileName = `drive_document_${Date.now()}.pdf`
+    const match = disposition.match(/filename="?([^";]+)"?/)
+    if (match && match[1]) {
+      fileName = match[1]
+    }
+    return { buffer, fileName }
+  } catch (err) {
+    console.error('Error descargando de Google Drive:', err)
+    return null
+  }
+}
+
 export interface ParseCaptionResult {
   target: 'worker' | 'company' | 'unknown'
   identifier: string // DNI o Código (ej. 'SST-POL-01')
@@ -62,9 +193,7 @@ export interface ParseCaptionResult {
 
 export function parseCaptionOrText(input: string): ParseCaptionResult {
   const clean = input.trim().toLowerCase()
-  const parts = clean.split(/\s+/)
 
-  // 1. Detección de documentos de empresa
   if (clean.includes('empresa') || clean.includes('politica') || clean.includes('iperc') || clean.includes('mapa')) {
     let code = 'SST-POL-01'
     let docType = 'politica'
@@ -89,11 +218,10 @@ export function parseCaptionOrText(input: string): ParseCaptionResult {
     return { target: 'company', identifier: code, docType }
   }
 
-  // 2. Detección por DNI (8 dígitos)
   const dniMatch = clean.match(/\b\d{8}\b/)
   if (dniMatch) {
     const dni = dniMatch[0]
-    let docType = 'risst' // default
+    let docType = 'risst'
 
     if (clean.includes('emo') || clean.includes('medico') || clean.includes('salud')) {
       docType = 'emos'
@@ -111,6 +239,76 @@ export function parseCaptionOrText(input: string): ParseCaptionResult {
   return { target: 'unknown', identifier: '', docType: '' }
 }
 
+export async function saveWorkerDocumentFile({
+  chatId,
+  worker,
+  docType,
+  buffer,
+  fileName,
+  source = 'telegram'
+}: {
+  chatId: number | string
+  worker: { id: string; first_name: string; last_name: string; document_number: string }
+  docType: string
+  buffer: Buffer
+  fileName: string
+  source?: 'telegram' | 'drive'
+}) {
+  const supabase = await createClient()
+  const ext = fileName.split('.').pop() || 'jpg'
+  const storagePath = `legajos/${worker.id}/${docType}_${Date.now()}.${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('sst-documents')
+    .upload(storagePath, buffer, {
+      contentType: ext === 'pdf' ? 'application/pdf' : 'image/jpeg',
+      upsert: true
+    })
+
+  if (uploadError) {
+    await sendTelegramMessage(chatId, `❌ Error guardando en almacenamiento seguro: ${uploadError.message}`)
+    return false
+  }
+
+  await ingestDocument({
+    source,
+    targetType: 'worker',
+    codeOrWorkerId: worker.id,
+    documentType: docType,
+    filePath: storagePath,
+    fileName,
+    fileSize: buffer.length
+  })
+
+  const docNames: Record<string, string> = {
+    risst: 'Cargo firmado de RISST',
+    emos: 'Certificado de Aptitud Médica (EMO)',
+    epps: 'Cargo de Entrega de EPP',
+    capacitaciones: 'Constancia de Capacitación'
+  }
+
+  const appUrl = getAppUrl()
+
+  await sendTelegramMessage(
+    chatId,
+    `✅ *¡Documento Digitalizado con Éxito!*\n\n` +
+    `👤 *Trabajador:* ${worker.first_name} ${worker.last_name}\n` +
+    `🆔 *DNI:* \`${worker.document_number}\`\n` +
+    `📄 *Tipo:* ${docNames[docType] || docType.toUpperCase()}\n` +
+    `📡 *Origen:* ${source === 'drive' ? 'Google Drive Escaneado' : 'Telegram Mobile'}\n\n` +
+    `🛡️ *Expediente SUNAFIL actualizado.*`,
+    {
+      inline_keyboard: [
+        [
+          { text: '👁️ Ver Legajo en Mini App', web_app: { url: `${appUrl}/expediente` } }
+        ]
+      ]
+    }
+  )
+
+  return true
+}
+
 export async function processTelegramUpload(
   chatId: number | string,
   fileId: string,
@@ -119,20 +317,27 @@ export async function processTelegramUpload(
 ) {
   const parsed = parseCaptionOrText(caption)
 
+  // Si no se incluyó texto descriptivo, guardar temporalmente y preguntar con botones interactivos
   if (parsed.target === 'unknown') {
+    const isPdf = originalFileName?.toLowerCase().endsWith('.pdf') || false
+    pendingUploadsByChat.set(chatId, {
+      fileId,
+      fileName: originalFileName,
+      isPdf,
+      timestamp: Date.now()
+    })
+
     await sendTelegramMessage(
       chatId,
-      `⚠️ *No se pudo identificar a qué corresponde el documento.*\n\n` +
-      `Por favor, envía la foto o PDF agregando un texto (pie de foto) con el formato:\n` +
-      `• *DNI + Tipo:* \`42788318 risst\` o \`42788318 emo\` o \`42788318 epp\`\n` +
-      `• *Empresa:* \`empresa risst\` o \`empresa iperc\` o \`empresa politica\``
+      `📄 *Archivo recibido correctamente.*\n\n` +
+      `¿A qué requisito corresponde este documento? *Toca una opción:*`,
+      getDocumentTypeInlineKeyboard()
     )
     return
   }
 
   const supabase = await createClient()
 
-  // Si es trabajador, buscarlo por DNI
   if (parsed.target === 'worker') {
     const { data: worker } = await supabase
       .from('workers')
@@ -143,65 +348,35 @@ export async function processTelegramUpload(
     if (!worker) {
       await sendTelegramMessage(
         chatId,
-        `❌ *Trabajador no encontrado:* No existe ningún trabajador activo con el DNI \`${parsed.identifier}\` en la base de datos.`
+        `❌ *Trabajador no encontrado:* No existe trabajador con DNI \`${parsed.identifier}\`.\n\n` +
+        `Usa el botón *👥 Nómina (33 Trabajadores)* para ver la lista autorizada.`
       )
       return
     }
 
     await sendTelegramMessage(
       chatId,
-      `⏳ Descargando y guardando documento para *${worker.first_name} ${worker.last_name}*...`
+      `⏳ Procesando y guardando documento de *${worker.first_name} ${worker.last_name}*...`
     )
 
     const file = await downloadTelegramFile(fileId)
     if (!file) {
-      await sendTelegramMessage(chatId, `❌ Error descargando archivo desde los servidores de Telegram.`)
+      await sendTelegramMessage(chatId, `❌ Error al descargar el archivo desde Telegram.`)
       return
     }
 
     const ext = originalFileName?.split('.').pop() || file.fileName.split('.').pop() || 'jpg'
-    const storagePath = `legajos/${worker.id}/${parsed.docType}_tg_${Date.now()}.${ext}`
+    const fileName = originalFileName || `telegram_${parsed.docType}_${worker.document_number}.${ext}`
 
-    const { error: uploadError } = await supabase.storage
-      .from('sst-documents')
-      .upload(storagePath, file.buffer, {
-        contentType: ext === 'pdf' ? 'application/pdf' : 'image/jpeg',
-        upsert: true
-      })
-
-    if (uploadError) {
-      await sendTelegramMessage(chatId, `❌ Error guardando en almacenamiento: ${uploadError.message}`)
-      return
-    }
-
-    // Ingestar en la base de datos
-    await ingestDocument({
-      source: 'telegram',
-      targetType: 'worker',
-      codeOrWorkerId: worker.id,
-      documentType: parsed.docType,
-      filePath: storagePath,
-      fileName: originalFileName || `telegram_${parsed.docType}_${worker.document_number}.${ext}`,
-      fileSize: file.buffer.length
-    })
-
-    const docNames: Record<string, string> = {
-      risst: 'Cargo firmado de RISST',
-      emos: 'Certificado de Aptitud Médica (EMO)',
-      epps: 'Cargo de Entrega de EPP',
-      capacitaciones: 'Constancia de Capacitación'
-    }
-
-    await sendTelegramMessage(
+    await saveWorkerDocumentFile({
       chatId,
-      `✅ *¡Documento Digitalizado con Éxito!*\n\n` +
-      `👤 *Trabajador:* ${worker.first_name} ${worker.last_name}\n` +
-      `🆔 *DNI:* ${worker.document_number}\n` +
-      `📄 *Tipo:* ${docNames[parsed.docType] || parsed.docType.toUpperCase()}\n` +
-      `🛡️ *Expediente SUNAFIL actualizado.*`
-    )
+      worker,
+      docType: parsed.docType,
+      buffer: file.buffer,
+      fileName,
+      source: 'telegram'
+    })
   } else {
-    // Documento de empresa
     await sendTelegramMessage(
       chatId,
       `⏳ Guardando documento institucional de empresa (*${parsed.identifier}*)...`
@@ -237,11 +412,20 @@ export async function processTelegramUpload(
       fileSize: file.buffer.length
     })
 
+    const appUrl = getAppUrl()
+
     await sendTelegramMessage(
       chatId,
       `✅ *¡Documento Institucional Guardado con Éxito!*\n\n` +
       `🏢 *Requisito:* ${parsed.identifier}\n` +
-      `🛡️ *Expediente SUNAFIL actualizado.*`
+      `🛡️ *Expediente SUNAFIL actualizado.*`,
+      {
+        inline_keyboard: [
+          [
+            { text: '🚀 Ver Expediente en Mini App', web_app: { url: `${appUrl}/expediente` } }
+          ]
+        ]
+      }
     )
   }
 }
