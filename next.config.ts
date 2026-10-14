@@ -13,6 +13,19 @@ const nextConfig: NextConfig = {
   experimental: {
     mcpServer: true,
   },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:;",
+          },
+        ],
+      },
+    ]
+  },
 }
 
 export default nextConfig

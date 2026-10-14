@@ -14,6 +14,7 @@ import {
 } from '@/features/telegram/services/telegram-service'
 import { getDossierSummary, ingestDocument } from '@/features/sst/services/dossier-service'
 import { createClient } from '@/lib/supabase/server'
+import { seedOfficialWorkers } from '@/features/workers/actions/worker-actions'
 
 export async function GET() {
   return NextResponse.json({
@@ -50,17 +51,27 @@ export async function POST(req: NextRequest) {
 
       if (data === 'action:trabajadores') {
         const supabase = await createClient()
-        const { data: workers } = await supabase
+        let { data: workers } = await supabase
           .from('workers')
           .select('document_number, first_name, last_name, job_title')
           .order('last_name', { ascending: true })
-          .limit(20)
+          .limit(25)
+
+        if (!workers || workers.length === 0) {
+          await seedOfficialWorkers()
+          const res = await supabase
+            .from('workers')
+            .select('document_number, first_name, last_name, job_title')
+            .order('last_name', { ascending: true })
+            .limit(25)
+          workers = res.data || []
+        }
 
         const list = (workers || []).map((w, i) => `${i + 1}. \`${w.document_number}\` - ${w.last_name}, ${w.first_name} _(${w.job_title})_`).join('\n')
         
         await sendTelegramMessage(
           chatId,
-          `👥 *Nómina de Trabajadores Registrados (Mostrando primeros 20):*\n\n` +
+          `👥 *Nómina Oficial (33 Trabajadores SUNAFIL):*\n\n` +
           (list || 'No hay trabajadores cargados aún.') +
           `\n\n💡 *Para subir un documento:* Envía la foto o PDF agregando el DNI en el mensaje (ej: \`42788318 emo\`).`,
           getMainInlineKeyboard()
@@ -178,19 +189,29 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true })
       }
 
-      if (text === '👥 Nómina (33 Trabajadores)' || text.startsWith('/trabajadores')) {
+      if (text === '👥 Nómina (33 Trabajadores)' || text.startsWith('/trabajadores') || text === '/nomina') {
         const supabase = await createClient()
-        const { data: workers } = await supabase
+        let { data: workers } = await supabase
           .from('workers')
           .select('document_number, first_name, last_name, job_title')
           .order('last_name', { ascending: true })
-          .limit(20)
+          .limit(25)
+
+        if (!workers || workers.length === 0) {
+          await seedOfficialWorkers()
+          const res = await supabase
+            .from('workers')
+            .select('document_number, first_name, last_name, job_title')
+            .order('last_name', { ascending: true })
+            .limit(25)
+          workers = res.data || []
+        }
 
         const list = (workers || []).map((w, i) => `${i + 1}. \`${w.document_number}\` - ${w.last_name}, ${w.first_name}`).join('\n')
         
         await sendTelegramMessage(
           chatId,
-          `👥 *Nómina Oficial (Primeros 20 trabajadores):*\n\n` +
+          `👥 *Nómina Oficial (33 Trabajadores SUNAFIL):*\n\n` +
           (list || 'No hay trabajadores registrados en la base de datos.') +
           `\n\n📌 Para subir su documento, envía la foto con su DNI (ej: \`42788318 emo\`).`,
           getMainInlineKeyboard()

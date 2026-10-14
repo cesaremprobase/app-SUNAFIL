@@ -30,11 +30,12 @@ export async function updateSession(request: NextRequest) {
   // refrescar token
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Proteger rutas
+  // Proteger rutas (permitir api y la mini app de carga rápida /subir para Telegram)
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/signup')
   const isApiRoute = request.nextUrl.pathname.startsWith('/api')
+  const isMiniAppRoute = request.nextUrl.pathname.startsWith('/subir')
 
-  if (!user && !isAuthRoute && !isApiRoute && request.nextUrl.pathname !== '/') {
+  if (!user && !isAuthRoute && !isApiRoute && !isMiniAppRoute && request.nextUrl.pathname !== '/') {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
