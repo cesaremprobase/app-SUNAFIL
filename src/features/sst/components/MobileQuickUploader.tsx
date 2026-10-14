@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useMemo } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { 
   Camera, 
   Upload, 
@@ -28,8 +28,9 @@ import {
 } from '../actions/dossier-actions'
 
 interface MobileQuickUploaderProps {
-  workerLegajos: WorkerLegajoSummary[]
-  companyRequirements: LegalRequirement[]
+  workerLegajos?: WorkerLegajoSummary[]
+  companyRequirements?: LegalRequirement[]
+  initialTipo?: string
 }
 
 type AreaType = 'emo' | 'risst' | 'epp' | 'capacitaciones' | 'empresa'
@@ -91,15 +92,15 @@ const AREAS: Array<{
 ]
 
 export function MobileQuickUploader({
-  workerLegajos,
-  companyRequirements
+  workerLegajos = [],
+  companyRequirements = [],
+  initialTipo = 'emo'
 }: MobileQuickUploaderProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const queryTipo = (searchParams.get('tipo')?.toLowerCase() as AreaType) || 'emo'
+  const cleanTipo = (initialTipo?.toLowerCase() as AreaType) || 'emo'
   
   const [activeArea, setActiveArea] = useState<AreaType>(
-    AREAS.some(a => a.id === queryTipo) ? queryTipo : 'emo'
+    AREAS.some(a => a.id === cleanTipo) ? cleanTipo : 'emo'
   )
   const [searchTerm, setSearchTerm] = useState('')
   const [filterMissingOnly, setFilterMissingOnly] = useState(false)
