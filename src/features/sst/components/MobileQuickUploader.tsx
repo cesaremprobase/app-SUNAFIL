@@ -353,37 +353,38 @@ export function MobileQuickUploader({
                         </button>
                       )}
 
-                      {/* Botón de Cargar / Reemplazar con input file oculto */}
-                      <label className={cn(
-                        "flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold cursor-pointer transition-all active:scale-98",
-                        isComplete
-                          ? "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                          : "bg-blue-600 hover:bg-blue-700 text-white shadow-xs",
-                        isUploading && "opacity-60 pointer-events-none"
-                      )}>
-                        {isUploading ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Subiendo...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Camera className="w-3.5 h-3.5" />
-                            <span>{isComplete ? 'Cambiar foto' : 'Tomar foto o subir'}</span>
-                          </>
-                        )}
+                      {/* Botón de Cargar / Reemplazar con input nativo transparente que responde al toque */}
+                      <div className="flex-1 relative overflow-hidden rounded-lg">
+                        <div className={cn(
+                          "flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all pointer-events-none",
+                          isComplete
+                            ? "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                            : "bg-blue-600 hover:bg-blue-700 text-white shadow-xs",
+                          isUploading && "opacity-60"
+                        )}>
+                          {isUploading ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Subiendo...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Camera className="w-3.5 h-3.5" />
+                              <span>{isComplete ? 'Cambiar foto' : 'Tomar foto o subir'}</span>
+                            </>
+                          )}
+                        </div>
                         <input
                           type="file"
                           accept="image/*,application/pdf"
-                          capture="environment"
-                          className="hidden"
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                           disabled={isUploading}
                           onChange={e => {
                             const file = e.target.files?.[0]
                             if (file) handleWorkerFileUpload(w.workerId, file)
                           }}
                         />
-                      </label>
+                      </div>
                     </div>
                   </div>
                 )
@@ -446,36 +447,37 @@ export function MobileQuickUploader({
                     </button>
                   )}
 
-                  <label className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold cursor-pointer transition-all active:scale-98",
-                    req.isComplete
-                      ? "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                      : "bg-blue-600 hover:bg-blue-700 text-white shadow-xs",
-                    isUploading && "opacity-60 pointer-events-none"
-                  )}>
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Subiendo...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>{req.isComplete ? 'Reemplazar archivo' : 'Cargar firmado (Foto/PDF)'}</span>
-                      </>
-                    )}
+                  <div className="flex-1 relative overflow-hidden rounded-lg">
+                    <div className={cn(
+                      "flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all pointer-events-none",
+                      req.isComplete
+                        ? "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                        : "bg-blue-600 hover:bg-blue-700 text-white shadow-xs",
+                      isUploading && "opacity-60"
+                    )}>
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Subiendo...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{req.isComplete ? 'Reemplazar archivo' : 'Cargar firmado (Foto/PDF)'}</span>
+                        </>
+                      )}
+                    </div>
                     <input
                       type="file"
                       accept="image/*,application/pdf"
-                      capture="environment"
-                      className="hidden"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                       disabled={isUploading}
                       onChange={e => {
                         const file = e.target.files?.[0]
                         if (file) handleCompanyFileUpload(req.code, file)
                       }}
                     />
-                  </label>
+                  </div>
                 </div>
               </div>
             )
