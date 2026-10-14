@@ -67,21 +67,25 @@ export function getAppUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || 'https://app-sunafil.vercel.app'
 }
 
-// Teclado persistente en el chat (ReplyKeyboardMarkup)
+// Teclado persistente en el chat (ReplyKeyboardMarkup con accesos directos por área)
 export function getMainReplyKeyboard() {
   const appUrl = getAppUrl()
   return {
     keyboard: [
       [
-        { text: '📱 Abrir App SUNAFIL (Mini App)', web_app: { url: `${appUrl}/expediente` } }
+        { text: '📸 Cargar Fotos / Escanear (Todo)', web_app: { url: `${appUrl}/subir` } }
+      ],
+      [
+        { text: '🩺 Subir EMOs', web_app: { url: `${appUrl}/subir?tipo=emo` } },
+        { text: '📋 Subir RISST', web_app: { url: `${appUrl}/subir?tipo=risst` } }
+      ],
+      [
+        { text: '🦺 Subir EPPs', web_app: { url: `${appUrl}/subir?tipo=epp` } },
+        { text: '🏢 Subir Empresa', web_app: { url: `${appUrl}/subir?tipo=empresa` } }
       ],
       [
         { text: '📊 Estado del Expediente' },
         { text: '👥 Nómina (33 Trabajadores)' }
-      ],
-      [
-        { text: '📁 Subir desde Google Drive' },
-        { text: '📸 Guía de Escáner HD' }
       ]
     ],
     resize_keyboard: true,
@@ -89,21 +93,32 @@ export function getMainReplyKeyboard() {
   }
 }
 
-// Botones en línea para mensajes (InlineKeyboardMarkup)
+// Botones en línea para mensajes con enlaces directos a cada área específica
 export function getMainInlineKeyboard() {
   const appUrl = getAppUrl()
   return {
     inline_keyboard: [
       [
-        { text: '🚀 Abrir Mini App SGSST (Pantalla Completa)', web_app: { url: `${appUrl}/expediente` } }
+        { text: '🩺 Cargar Exámenes Médicos (EMO)', web_app: { url: `${appUrl}/subir?tipo=emo` } }
       ],
       [
-        { text: '📊 Estado Actual', callback_data: 'action:estado' },
-        { text: '👥 Nómina 33', callback_data: 'action:trabajadores' }
+        { text: '📋 Cargar Cargos de RISST', web_app: { url: `${appUrl}/subir?tipo=risst` } }
       ],
       [
-        { text: '📁 Vincular Google Drive', callback_data: 'action:drive_help' },
-        { text: '📸 Guía Escáner HD', callback_data: 'action:scan_help' }
+        { text: '🦺 Cargar Entrega de EPP', web_app: { url: `${appUrl}/subir?tipo=epp` } }
+      ],
+      [
+        { text: '🎓 Cargar 4 Capacitaciones', web_app: { url: `${appUrl}/subir?tipo=capacitaciones` } }
+      ],
+      [
+        { text: '🏢 Cargar Documentos de Empresa (IPERC/Plan)', web_app: { url: `${appUrl}/subir?tipo=empresa` } }
+      ],
+      [
+        { text: '📁 Ver Expediente de Inspección Completo', web_app: { url: `${appUrl}/expediente` } }
+      ],
+      [
+        { text: '📊 Estado Rápido', callback_data: 'action:estado' },
+        { text: '👥 Nómina (33)', callback_data: 'action:trabajadores' }
       ]
     ]
   }

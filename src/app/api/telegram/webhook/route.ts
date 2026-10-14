@@ -152,15 +152,13 @@ export async function POST(req: NextRequest) {
       if (text.startsWith('/start') || text.startsWith('/help') || text.startsWith('/ayuda')) {
         await sendTelegramMessage(
           chatId,
-          `👋 *¡Hola! Bienvenido al Asistente SGSST - SUNAFIL Pro*\n\n` +
-          `Este bot está conectado en tiempo real con tu plataforma. Puedes digitalizar documentos físicos, revisar el avance del expediente y abrir la **Mini App** interactiva.\n\n` +
-          `👇 *Usa los botones de abajo para navegar o toca "Abrir App SUNAFIL" para usar la plataforma aquí mismo:*`,
+          `📸 *Carga Rápida de Documentos Físicos SGSST*\n\n` +
+          `Selecciona el área que deseas cargar. Se abrirá la **Mini App** directamente en esa sección para que tomes la foto con tu cámara o la subas desde Google Drive:`,
           getMainReplyKeyboard()
         )
-        // También enviar mensaje con botones inline
         await sendTelegramMessage(
           chatId,
-          `🚀 *Acciones Rápidas:*`,
+          `👇 *Toca el área exacta donde quieres subir el documento:*`,
           getMainInlineKeyboard()
         )
         return NextResponse.json({ ok: true })

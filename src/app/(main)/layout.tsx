@@ -1,4 +1,4 @@
-import { AppSidebar } from '@/components/layout/AppSidebar'
+import { AppSidebar, MobileNav } from '@/components/layout/AppSidebar'
 import { Bell, Search } from 'lucide-react'
 
 export default function MainLayout({
@@ -7,11 +7,17 @@ export default function MainLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50/70">
+      {/* Desktop Sidebar (hidden on mobile) */}
       <AppSidebar />
-      <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        {/* Top Header */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 z-10">
+
+      {/* Main Content Container */}
+      <div className="flex-1 flex flex-col min-h-screen min-w-0 overflow-x-hidden">
+        {/* Mobile Header and Navigation */}
+        <MobileNav />
+
+        {/* Desktop Top Header (hidden on mobile) */}
+        <header className="hidden md:flex h-16 bg-white border-b border-gray-200 items-center justify-between px-8 z-10 flex-shrink-0">
           <div className="flex items-center gap-4 text-gray-400">
             <Search className="w-5 h-5" />
             <input 
@@ -28,8 +34,8 @@ export default function MainLayout({
           </div>
         </header>
         
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto">
+        {/* Main Scrollable View (padded on mobile for bottom bar) */}
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-8">
           {children}
         </main>
       </div>
