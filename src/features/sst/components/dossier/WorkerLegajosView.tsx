@@ -11,7 +11,10 @@ import {
   Upload, 
   ExternalLink, 
   AlertCircle,
-  Loader2
+  Loader2,
+  Camera,
+  FileCheck,
+  UploadCloud
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -271,8 +274,16 @@ export function WorkerLegajosView({ legajos }: WorkerLegajosViewProps) {
       </div>
 
       {/* Modal de Carga de Documento a Trabajador */}
-      <Dialog open={Boolean(uploadTarget)} onOpenChange={(open) => !open && setUploadTarget(null)}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog open={Boolean(uploadTarget)} onOpenChange={(open) => {
+        if (!open) {
+          setUploadTarget(null)
+          setFile(null)
+        }
+      }}>
+        <DialogContent 
+          style={{ backgroundColor: '#ffffff' }}
+          className="sm:max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200"
+        >
           <DialogHeader>
             <DialogTitle>Digitalizar Documento de Trabajador</DialogTitle>
             <DialogDescription>
@@ -294,28 +305,68 @@ export function WorkerLegajosView({ legajos }: WorkerLegajosViewProps) {
                 type="date"
                 value={documentDate}
                 onChange={(e) => setDocumentDate(e.target.value)}
-                className="w-full text-xs border border-gray-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full text-xs border border-gray-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Archivo Escaneado (PDF o Foto legible)
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-gray-700">
+                Selecciona cómo deseas cargar el documento:
               </label>
-              <input
-                type="file"
-                accept=".pdf,image/*"
-                required
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-200 rounded-lg p-2"
-              />
+
+              <div className="grid grid-cols-2 gap-2.5">
+                {/* Opción 1: Cámara en vivo */}
+                <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50/80 hover:bg-gray-100 p-3 text-center transition-colors">
+                  <div className="flex flex-col items-center justify-center gap-1.5 pointer-events-none">
+                    <Camera className="w-5 h-5 text-blue-600" />
+                    <span className="text-xs font-semibold text-gray-800">Tomar Foto</span>
+                    <span className="text-[10px] text-gray-400">Cámara en vivo</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+
+                {/* Opción 2: Archivos / Google Drive */}
+                <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50/80 hover:bg-gray-100 p-3 text-center transition-colors">
+                  <div className="flex flex-col items-center justify-center gap-1.5 pointer-events-none">
+                    <UploadCloud className="w-5 h-5 text-emerald-600" />
+                    <span className="text-xs font-semibold text-gray-800">Archivos / Drive</span>
+                    <span className="text-[10px] text-gray-400">PDF o foto guardada</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+              </div>
+
+              {/* Archivo Seleccionado */}
+              {file && (
+                <div className="flex items-center justify-between p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs animate-in fade-in">
+                  <div className="flex items-center gap-2 truncate">
+                    <FileCheck className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    <span className="font-semibold text-blue-900 truncate">{file.name}</span>
+                  </div>
+                  <span className="text-[10px] text-blue-700 font-medium whitespace-nowrap">{(file.size / 1024).toFixed(0)} KB</span>
+                </div>
+              )}
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
               <Button 
                 type="button" 
                 variant="outline" 
-                onClick={() => setUploadTarget(null)}
+                onClick={() => {
+                  setUploadTarget(null)
+                  setFile(null)
+                }}
                 disabled={isUploading}
               >
                 Cancelar

@@ -343,37 +343,57 @@ export function MobileQuickUploader({
                     </div>
 
                     {/* Botón de Acción Directo */}
+                    {/* Botones de Acción Directos: Cámara y Archivos/Drive */}
                     <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
                       {isComplete && req?.filePath && (
                         <button
                           onClick={() => handleViewDocument(req.filePath!)}
-                          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border border-gray-200 transition-colors"
+                          className="py-1.5 px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border border-gray-200 transition-colors flex items-center gap-1 flex-shrink-0"
+                          title="Ver documento actual"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
-                          Ver foto/PDF
+                          <span>Ver</span>
                         </button>
                       )}
 
-                      {/* Botón de Cargar / Reemplazar con input nativo transparente que responde al toque */}
+                      {/* Opción 1: Cámara en vivo */}
                       <div className="flex-1 relative overflow-hidden rounded-lg">
                         <div className={cn(
-                          "flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all pointer-events-none",
-                          isComplete
-                            ? "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                            : "bg-blue-600 hover:bg-blue-700 text-white shadow-xs",
+                          "flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-semibold transition-all pointer-events-none",
+                          "bg-blue-600 hover:bg-blue-700 text-white shadow-xs",
                           isUploading && "opacity-60"
                         )}>
                           {isUploading ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              <span>Subiendo...</span>
-                            </>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           ) : (
                             <>
                               <Camera className="w-3.5 h-3.5" />
-                              <span>{isComplete ? 'Cambiar foto' : 'Tomar foto o subir'}</span>
+                              <span>Cámara</span>
                             </>
                           )}
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                          disabled={isUploading}
+                          onChange={e => {
+                            const file = e.target.files?.[0]
+                            if (file) handleWorkerFileUpload(w.workerId, file)
+                          }}
+                        />
+                      </div>
+
+                      {/* Opción 2: Archivos / Google Drive */}
+                      <div className="flex-1 relative overflow-hidden rounded-lg">
+                        <div className={cn(
+                          "flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-semibold transition-all pointer-events-none",
+                          "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 shadow-xs",
+                          isUploading && "opacity-60"
+                        )}>
+                          <Upload className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Drive / Archivo</span>
                         </div>
                         <input
                           type="file"
@@ -441,32 +461,51 @@ export function MobileQuickUploader({
                   {req.isComplete && req.filePath && (
                     <button
                       onClick={() => handleViewDocument(req.filePath!)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border border-gray-200"
+                      className="py-1.5 px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border border-gray-200 flex items-center gap-1 flex-shrink-0"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
-                      Ver documento
+                      <span>Ver</span>
                     </button>
                   )}
 
+                  {/* Opción 1: Cámara en vivo */}
                   <div className="flex-1 relative overflow-hidden rounded-lg">
                     <div className={cn(
-                      "flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all pointer-events-none",
-                      req.isComplete
-                        ? "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                        : "bg-blue-600 hover:bg-blue-700 text-white shadow-xs",
+                      "flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-semibold transition-all pointer-events-none",
+                      "bg-blue-600 hover:bg-blue-700 text-white shadow-xs",
                       isUploading && "opacity-60"
                     )}>
                       {isUploading ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Subiendo...</span>
-                        </>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : (
                         <>
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>{req.isComplete ? 'Reemplazar archivo' : 'Cargar firmado (Foto/PDF)'}</span>
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>Cámara</span>
                         </>
                       )}
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                      disabled={isUploading}
+                      onChange={e => {
+                        const file = e.target.files?.[0]
+                        if (file) handleCompanyFileUpload(req.code, file)
+                      }}
+                    />
+                  </div>
+
+                  {/* Opción 2: Archivos / Google Drive */}
+                  <div className="flex-1 relative overflow-hidden rounded-lg">
+                    <div className={cn(
+                      "flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-semibold transition-all pointer-events-none",
+                      "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 shadow-xs",
+                      isUploading && "opacity-60"
+                    )}>
+                      <Upload className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Drive / Archivo</span>
                     </div>
                     <input
                       type="file"
