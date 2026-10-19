@@ -145,21 +145,111 @@ export function MobileQuickUploader({
     capacitaciones: 'capacitaciones'
   }
 
-  // Manejo de subida de archivo de trabajador via API Route (no Server Action)
+  // Función para optimizar y comprimir fotos del celular antes de enviar a Vercel
+  const compressImageIfNeeded = async (file: File): Promise<File> => {
+    // Si no es imagen (ej: PDF), retornar directo
+    if (!file.type.startsWith('image/')) {
+      if (file.size > 4.5 * 1024 * 1024) {
+        throw new Error('El PDF excede 4.5 MB. Por favor compártelo directo al chat del bot.')
+      }
+      return file
+    }
+
+    // Si pesa menos de 1 MB, no necesita compresión
+    if (file.size < 1024 * 1024) {
+      return file
+    }
+
+    return new Promise((resolve) => {
+      try {
+        const img = new Image()
+        const objectUrl = URL.createObjectURL(file)
+
+        img.onload = () => {
+          try {
+            URL.revokeObjectURL(objectUrl)
+            const canvas = document.createElement('canvas')
+            let { width, height } = img
+
+            // Límite de 2048px para conservar nitidez completa de firmas, sellos y texto
+            const MAX_DIM = 2048
+            if (width > MAX_DIM || height > MAX_DIM) {
+              if (width > height) {
+                height = Math.round((height * MAX_DIM) / width)
+                width = MAX_DIM
+              } else {
+                width = Math.round((width * MAX_DIM) / height)
+                height = MAX_DIM
+              }
+            }
+
+            canvas.width = width
+            canvas.height = height
+
+            const ctx = canvas.getContext('2d')
+            if (!ctx) {
+              resolve(file)
+              return
+            }
+
+            ctx.drawImage(img, 0, 0, width, height)
+
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  resolve(file)
+                  return
+                }
+                const cleanName = file.name.replace(/\.[^/.]+$/, '') + '.jpg'
+                const compressedFile = new File([blob], cleanName, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                })
+                resolve(compressedFile)
+              },
+              'image/jpeg',
+              0.82
+            )
+          } catch {
+            resolve(file)
+          }
+        }
+
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl)
+          resolve(file)
+        }
+
+        img.src = objectUrl
+      } catch {
+        resolve(file)
+      }
+    })
+  }
+
+  // Manejo de subida de archivo de trabajador via API Route con compresión
   const handleWorkerFileUpload = async (workerId: string, file: File) => {
     setUploadingTargetId(workerId)
-    const formData = new FormData()
-    formData.append('workerId', workerId)
-    formData.append('documentType', typeMapping[activeArea] || activeArea)
-    formData.append('file', file)
 
     try {
+      const optimizedFile = await compressImageIfNeeded(file)
+      const formData = new FormData()
+      formData.append('workerId', workerId)
+      formData.append('documentType', typeMapping[activeArea] || activeArea)
+      formData.append('file', optimizedFile)
+
       const res = await fetch('/api/upload/worker', {
         method: 'POST',
         body: formData,
       })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        throw new Error(errData?.error || `Error del servidor (${res.status})`)
+      }
+
       const json = await res.json()
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Error desconocido')
+      if (!json.ok) throw new Error(json.error || 'Error desconocido')
       toast.success('¡Documento digitalizado con éxito!')
       router.refresh()
     } catch (err: any) {
@@ -169,20 +259,28 @@ export function MobileQuickUploader({
     }
   }
 
-  // Manejo de subida de documento de empresa via API Route
+  // Manejo de subida de documento de empresa via API Route con compresión
   const handleCompanyFileUpload = async (requirementCode: string, file: File) => {
     setUploadingTargetId(requirementCode)
-    const formData = new FormData()
-    formData.append('requirementCode', requirementCode)
-    formData.append('file', file)
 
     try {
+      const optimizedFile = await compressImageIfNeeded(file)
+      const formData = new FormData()
+      formData.append('requirementCode', requirementCode)
+      formData.append('file', optimizedFile)
+
       const res = await fetch('/api/upload/company', {
         method: 'POST',
         body: formData,
       })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        throw new Error(errData?.error || `Error del servidor (${res.status})`)
+      }
+
       const json = await res.json()
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Error desconocido')
+      if (!json.ok) throw new Error(json.error || 'Error desconocido')
       toast.success('¡Documento institucional cargado con éxito!')
       router.refresh()
     } catch (err: any) {
