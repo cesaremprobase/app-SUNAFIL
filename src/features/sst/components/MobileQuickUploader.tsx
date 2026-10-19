@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Camera, 
@@ -21,11 +21,7 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { WorkerLegajoSummary, LegalRequirement } from '../types/dossier'
-import { 
-  uploadAndIngestWorkerDocument, 
-  uploadAndIngestCompanyDocument, 
-  getDocumentDownloadUrl 
-} from '../actions/dossier-actions'
+import { getDocumentDownloadUrl } from '../actions/dossier-actions'
 
 interface MobileQuickUploaderProps {
   workerLegajos?: WorkerLegajoSummary[]
@@ -104,7 +100,6 @@ export function MobileQuickUploader({
   )
   const [searchTerm, setSearchTerm] = useState('')
   const [filterMissingOnly, setFilterMissingOnly] = useState(false)
-  const [isPending, startTransition] = useTransition()
   const [uploadingTargetId, setUploadingTargetId] = useState<string | null>(null)
 
   const currentAreaConfig = AREAS.find(a => a.id === activeArea) || AREAS[0]
@@ -142,52 +137,59 @@ export function MobileQuickUploader({
     })
   }, [workerLegajos, searchTerm, filterMissingOnly, currentAreaConfig])
 
-  // Manejo de subida de archivo de trabajador
+  // Mapeo de área a tipo de documento
+  const typeMapping: Record<string, string> = {
+    emo: 'emos',
+    risst: 'risst',
+    epp: 'epps',
+    capacitaciones: 'capacitaciones'
+  }
+
+  // Manejo de subida de archivo de trabajador via API Route (no Server Action)
   const handleWorkerFileUpload = async (workerId: string, file: File) => {
     setUploadingTargetId(workerId)
     const formData = new FormData()
     formData.append('workerId', workerId)
-    // Mapear al tipo que espera el backend ('emos', 'risst', 'epps', 'capacitaciones')
-    const typeMapping: Record<string, string> = {
-      emo: 'emos',
-      risst: 'risst',
-      epp: 'epps',
-      capacitaciones: 'capacitaciones'
-    }
     formData.append('documentType', typeMapping[activeArea] || activeArea)
     formData.append('file', file)
 
-    startTransition(async () => {
-      try {
-        await uploadAndIngestWorkerDocument(formData)
-        toast.success('¡Documento digitalizado con éxito!')
-        router.refresh()
-      } catch (err: any) {
-        toast.error(`Error al subir: ${err.message}`)
-      } finally {
-        setUploadingTargetId(null)
-      }
-    })
+    try {
+      const res = await fetch('/api/upload/worker', {
+        method: 'POST',
+        body: formData,
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Error desconocido')
+      toast.success('¡Documento digitalizado con éxito!')
+      router.refresh()
+    } catch (err: any) {
+      toast.error(`Error al subir: ${err.message}`)
+    } finally {
+      setUploadingTargetId(null)
+    }
   }
 
-  // Manejo de subida de documento de empresa
+  // Manejo de subida de documento de empresa via API Route
   const handleCompanyFileUpload = async (requirementCode: string, file: File) => {
     setUploadingTargetId(requirementCode)
     const formData = new FormData()
     formData.append('requirementCode', requirementCode)
     formData.append('file', file)
 
-    startTransition(async () => {
-      try {
-        await uploadAndIngestCompanyDocument(formData)
-        toast.success('¡Documento institucional cargado con éxito!')
-        router.refresh()
-      } catch (err: any) {
-        toast.error(`Error al subir: ${err.message}`)
-      } finally {
-        setUploadingTargetId(null)
-      }
-    })
+    try {
+      const res = await fetch('/api/upload/company', {
+        method: 'POST',
+        body: formData,
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Error desconocido')
+      toast.success('¡Documento institucional cargado con éxito!')
+      router.refresh()
+    } catch (err: any) {
+      toast.error(`Error al subir: ${err.message}`)
+    } finally {
+      setUploadingTargetId(null)
+    }
   }
 
   // Ver documento
