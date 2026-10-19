@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { 
   LegalRequirement, 
   WorkerLegajoSummary, 
@@ -296,7 +297,7 @@ export interface IngestDocumentPayload {
 }
 
 export async function ingestDocument(payload: IngestDocumentPayload) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   if (payload.targetType === 'worker') {
     const { data, error } = await supabase

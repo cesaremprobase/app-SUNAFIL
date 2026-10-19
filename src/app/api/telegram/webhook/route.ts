@@ -5,7 +5,9 @@ import {
   processTelegramUpload,
   getMainReplyKeyboard,
   getMainInlineKeyboard,
-  pendingUploadsByChat,
+  getPendingUpload,
+  setPendingUpload,
+  removePendingUpload,
   downloadTelegramFile,
   saveWorkerDocumentFile,
   extractGoogleDriveId,
@@ -13,7 +15,7 @@ import {
   getAppUrl
 } from '@/features/telegram/services/telegram-service'
 import { getDossierSummary, ingestDocument } from '@/features/sst/services/dossier-service'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { seedOfficialWorkers } from '@/features/workers/actions/worker-actions'
 
 export async function GET() {
@@ -112,7 +114,7 @@ export async function POST(req: NextRequest) {
 
       if (data.startsWith('set_doc:')) {
         const chosenType = data.replace('set_doc:', '')
-        const pending = pendingUploadsByChat.get(chatId)
+        const pending = await getPendingUpload(chatId)
         if (!pending) {
           await sendTelegramMessage(
             chatId, 
@@ -122,7 +124,7 @@ export async function POST(req: NextRequest) {
         }
 
         pending.docType = chosenType
-        pendingUploadsByChat.set(chatId, pending)
+        await setPendingUpload(chatId, pending)
 
         if (chosenType === 'empresa') {
           await sendTelegramMessage(
@@ -262,7 +264,7 @@ export async function POST(req: NextRequest) {
         const dniMatch = text.match(/\b\d{8}\b/)
         if (dniMatch) {
           const dni = dniMatch[0]
-          const supabase = await createClient()
+          const supabase = createAdminClient()
           const { data: worker } = await supabase
             .from('workers')
             .select('id, first_name, last_name, document_number')
@@ -288,7 +290,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Si no hay DNI en el texto, guardarlo como pendiente
-        pendingUploadsByChat.set(chatId, {
+        await setPendingUpload(chatId, {
           fileId: `drive_${driveId}`,
           fileName: driveFile.fileName,
           isPdf: true,
@@ -302,18 +304,39 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true })
       }
 
+      // Si el usuario responde (reply) directamente a una foto o documento anterior
+      const replyFileId = 
+        message.reply_to_message?.photo?.[message.reply_to_message.photo.length - 1]?.file_id ||
+        message.reply_to_message?.document?.file_id
+      const replyFileName = message.reply_to_message?.document?.file_name
+
+      if (replyFileId) {
+        await processTelegramUpload(chatId, replyFileId, text, replyFileName)
+        return NextResponse.json({ ok: true })
+      }
+
       // Si el texto es un DNI de 8 dígitos y hay una subida pendiente esperando DNI
       const dniMatch = text.match(/^\b\d{8}\b$/)
-      const pending = pendingUploadsByChat.get(chatId)
+      const pending = await getPendingUpload(chatId)
 
       if (dniMatch && pending && pending.docType) {
         const dni = dniMatch[0]
-        const supabase = await createClient()
-        const { data: worker } = await supabase
+        const supabase = createAdminClient()
+        let { data: worker } = await supabase
           .from('workers')
           .select('id, first_name, last_name, document_number')
           .eq('document_number', dni)
           .maybeSingle()
+
+        if (!worker) {
+          await seedOfficialWorkers()
+          const retry = await supabase
+            .from('workers')
+            .select('id, first_name, last_name, document_number')
+            .eq('document_number', dni)
+            .maybeSingle()
+          worker = retry.data
+        }
 
         if (!worker) {
           await sendTelegramMessage(
@@ -332,7 +355,7 @@ export async function POST(req: NextRequest) {
         const file = await downloadTelegramFile(pending.fileId)
         if (!file) {
           await sendTelegramMessage(chatId, `❌ Error descargando archivo desde Telegram.`)
-          pendingUploadsByChat.delete(chatId)
+          await removePendingUpload(chatId)
           return NextResponse.json({ ok: true })
         }
 
@@ -348,7 +371,7 @@ export async function POST(req: NextRequest) {
           source: 'telegram'
         })
 
-        pendingUploadsByChat.delete(chatId)
+        await removePendingUpload(chatId)
         return NextResponse.json({ ok: true })
       }
     }

@@ -9,9 +9,12 @@ const nextConfig: NextConfig = {
     // Evita que reglas de linter bloqueen el despliegue de produccion
     ignoreDuringBuilds: true,
   },
-  // Activa el MCP server en /_next/mcp (Next.js 16+)
+  // Activa el MCP server en /_next/mcp (Next.js 16+) y permite subida de fotos HD / PDFs de hasta 50MB
   experimental: {
     mcpServer: true,
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
   },
   async headers() {
     return [

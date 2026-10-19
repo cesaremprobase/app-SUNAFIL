@@ -1,5 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { ingestDocument } from '@/features/sst/services/dossier-service'
+import { seedOfficialWorkers } from '@/features/workers/actions/worker-actions'
 
 const TELEGRAM_API_URL = 'https://api.telegram.org'
 
@@ -11,8 +12,67 @@ export interface PendingUpload {
   timestamp: number
 }
 
-// Estado temporal en memoria para cuando el usuario sube foto/PDF sin pie de foto
+// Estado temporal en memoria (con persistencia cruzada en Supabase para Serverless en Vercel)
 export const pendingUploadsByChat = new Map<number | string, PendingUpload>()
+
+export async function setPendingUpload(chatId: number | string, data: PendingUpload) {
+  pendingUploadsByChat.set(chatId, data)
+  try {
+    const supabase = createAdminClient()
+    await supabase.from('telegram_bot_sessions').upsert({
+      chat_id: String(chatId),
+      file_id: data.fileId,
+      file_name: data.fileName || null,
+      doc_type: data.docType || null,
+      is_pdf: data.isPdf || false,
+      updated_at: new Date().toISOString()
+    })
+  } catch (err) {
+    // Si la tabla no existe aún, se preserva en memoria
+    console.warn('Persistencia en BD no disponible temporalmente:', err)
+  }
+}
+
+export async function getPendingUpload(chatId: number | string): Promise<PendingUpload | undefined> {
+  const mem = pendingUploadsByChat.get(chatId)
+  if (mem) return mem
+
+  try {
+    const supabase = createAdminClient()
+    const { data } = await supabase
+      .from('telegram_bot_sessions')
+      .select('*')
+      .eq('chat_id', String(chatId))
+      .maybeSingle()
+
+    if (data && data.file_id) {
+      return {
+        fileId: data.file_id,
+        fileName: data.file_name || undefined,
+        isPdf: data.is_pdf || false,
+        docType: data.doc_type || undefined,
+        timestamp: new Date(data.updated_at).getTime()
+      }
+    }
+  } catch (err) {
+    console.warn('Error leyendo sesión de telegram_bot_sessions:', err)
+  }
+
+  return undefined
+}
+
+export async function removePendingUpload(chatId: number | string) {
+  pendingUploadsByChat.delete(chatId)
+  try {
+    const supabase = createAdminClient()
+    await supabase
+      .from('telegram_bot_sessions')
+      .delete()
+      .eq('chat_id', String(chatId))
+  } catch (err) {
+    // ignore
+  }
+}
 
 export async function sendTelegramMessage(
   chatId: number | string, 
@@ -269,7 +329,7 @@ export async function saveWorkerDocumentFile({
   fileName: string
   source?: 'telegram' | 'drive'
 }) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const ext = fileName.split('.').pop() || 'jpg'
   const storagePath = `legajos/${worker.id}/${docType}_${Date.now()}.${ext}`
 
@@ -332,10 +392,10 @@ export async function processTelegramUpload(
 ) {
   const parsed = parseCaptionOrText(caption)
 
-  // Si no se incluyó texto descriptivo, guardar temporalmente y preguntar con botones interactivos
+  // Si no se incluyó texto descriptivo, guardar temporalmente (en BD + RAM) y preguntar con botones interactivos
   if (parsed.target === 'unknown') {
     const isPdf = originalFileName?.toLowerCase().endsWith('.pdf') || false
-    pendingUploadsByChat.set(chatId, {
+    await setPendingUpload(chatId, {
       fileId,
       fileName: originalFileName,
       isPdf,
@@ -351,14 +411,24 @@ export async function processTelegramUpload(
     return
   }
 
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   if (parsed.target === 'worker') {
-    const { data: worker } = await supabase
+    let { data: worker } = await supabase
       .from('workers')
       .select('id, first_name, last_name, document_number')
       .eq('document_number', parsed.identifier)
       .maybeSingle()
+
+    if (!worker) {
+      await seedOfficialWorkers()
+      const retry = await supabase
+        .from('workers')
+        .select('id, first_name, last_name, document_number')
+        .eq('document_number', parsed.identifier)
+        .maybeSingle()
+      worker = retry.data
+    }
 
     if (!worker) {
       await sendTelegramMessage(

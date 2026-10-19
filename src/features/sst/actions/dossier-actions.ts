@@ -1,11 +1,12 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { ingestDocument } from '../services/dossier-service'
 
 export async function uploadAndIngestWorkerDocument(formData: FormData) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const workerId = formData.get('workerId') as string
   const documentType = formData.get('documentType') as string
@@ -53,7 +54,7 @@ export async function uploadAndIngestWorkerDocument(formData: FormData) {
 }
 
 export async function uploadAndIngestCompanyDocument(formData: FormData) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const requirementCode = formData.get('requirementCode') as string
   const file = formData.get('file') as File

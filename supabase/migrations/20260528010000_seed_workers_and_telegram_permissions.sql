@@ -87,7 +87,32 @@ CREATE POLICY "Allow bot and web upload to sst-documents"
 ON storage.objects FOR INSERT
 WITH CHECK (bucket_id = 'sst-documents');
 
+DROP POLICY IF EXISTS "Allow bot and web update to sst-documents" ON storage.objects;
+CREATE POLICY "Allow bot and web update to sst-documents"
+ON storage.objects FOR UPDATE
+USING (bucket_id = 'sst-documents');
+
 DROP POLICY IF EXISTS "Allow bot and web read from sst-documents" ON storage.objects;
 CREATE POLICY "Allow bot and web read from sst-documents"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'sst-documents');
+
+-- ==============================================================================
+-- 5. SESIONES STATELESS DEL BOT DE TELEGRAM (Persistencia entre lambdas)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.telegram_bot_sessions (
+  chat_id text PRIMARY KEY,
+  file_id text NOT NULL,
+  file_name text,
+  is_pdf boolean DEFAULT false,
+  doc_type text,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.telegram_bot_sessions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all access to telegram_bot_sessions" ON public.telegram_bot_sessions;
+CREATE POLICY "Allow all access to telegram_bot_sessions" 
+ON public.telegram_bot_sessions FOR ALL 
+USING (true) 
+WITH CHECK (true);
+
