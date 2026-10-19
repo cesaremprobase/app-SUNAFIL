@@ -306,7 +306,7 @@ export function MobileQuickUploader({
               filteredWorkers.map(w => {
                 const req = w.requirements.find(r => r.type === currentAreaConfig.docTypeKey)
                 const isComplete = req?.isComplete || false
-                const isUploading = uploadingTargetId === w.workerId && isPending
+                const isUploading = uploadingTargetId === w.workerId
 
                 return (
                   <div
@@ -382,6 +382,7 @@ export function MobileQuickUploader({
                           disabled={isUploading}
                           onChange={e => {
                             const file = e.target.files?.[0]
+                            e.target.value = ''
                             if (file) handleWorkerFileUpload(w.workerId, file)
                           }}
                         />
@@ -404,6 +405,7 @@ export function MobileQuickUploader({
                           disabled={isUploading}
                           onChange={e => {
                             const file = e.target.files?.[0]
+                            e.target.value = ''
                             if (file) handleWorkerFileUpload(w.workerId, file)
                           }}
                         />
@@ -421,7 +423,7 @@ export function MobileQuickUploader({
       {activeArea === 'empresa' && (
         <div className="space-y-2.5">
           {companyRequirements.map(req => {
-            const isUploading = uploadingTargetId === req.code && isPending
+            const isUploading = uploadingTargetId === req.code
 
             return (
               <div 
@@ -494,6 +496,7 @@ export function MobileQuickUploader({
                       disabled={isUploading}
                       onChange={e => {
                         const file = e.target.files?.[0]
+                        e.target.value = ''
                         if (file) handleCompanyFileUpload(req.code, file)
                       }}
                     />
@@ -516,6 +519,7 @@ export function MobileQuickUploader({
                       disabled={isUploading}
                       onChange={e => {
                         const file = e.target.files?.[0]
+                        e.target.value = ''
                         if (file) handleCompanyFileUpload(req.code, file)
                       }}
                     />
