@@ -59,7 +59,7 @@ const COMPANY_LEGAL_SPECS: Array<{
   }
 ]
 
-export async function getCompanyDossier(): Promise<LegalRequirement[]> {
+export async function getCompanyDossier(selectedYear: number = 2026): Promise<LegalRequirement[]> {
   const supabase = await createClient()
 
   // Buscar si existen en sst_requirements
@@ -76,10 +76,22 @@ export async function getCompanyDossier(): Promise<LegalRequirement[]> {
   return COMPANY_LEGAL_SPECS.map(spec => {
     // Buscar en requirements o en sst_records
     const reqMatch = requirements?.find(r => r.code === spec.code)
-    const latestDoc = reqMatch?.sst_documents?.[0]
+    
+    // Filtrar documentos pertenecientes al año seleccionado
+    const docs = (reqMatch?.sst_documents || []).filter((d: any) => {
+      const dYear = new Date(d.issue_date || d.created_at).getFullYear()
+      const inPath = d.file_url?.includes(`/${selectedYear}/`)
+      return dYear === selectedYear || inPath
+    })
+
+    const latestDoc = docs[docs.length - 1]
     
     // Buscar por correspondencia en sst_records si no hay en sst_documents
     const recordMatch = sstRecords?.find(rec => {
+      const rYear = new Date(rec.last_updated_at || rec.created_at).getFullYear()
+      const matchesYear = rYear === selectedYear || rec.document_path?.includes(`/${selectedYear}/`)
+      if (!matchesYear && selectedYear !== 2026) return false
+
       if (spec.code === 'SST-RIS-01' && rec.record_type === 'risst') return true
       if (spec.code === 'SST-COM-01' && rec.record_type === 'comite') return true
       return false
@@ -107,7 +119,7 @@ export async function getCompanyDossier(): Promise<LegalRequirement[]> {
   })
 }
 
-export async function getWorkerLegajosDossier(): Promise<WorkerLegajoSummary[]> {
+export async function getWorkerLegajosDossier(selectedYear: number = 2026): Promise<WorkerLegajoSummary[]> {
   const supabase = await createClient()
 
   // Obtener trabajadores activos
@@ -129,10 +141,14 @@ export async function getWorkerLegajosDossier(): Promise<WorkerLegajoSummary[]> 
 
   const docsByWorker: Record<string, any[]> = {}
   documents?.forEach(doc => {
-    if (!docsByWorker[doc.worker_id]) {
-      docsByWorker[doc.worker_id] = []
+    const dYear = new Date(doc.document_date || doc.created_at).getFullYear()
+    const inPath = doc.file_path?.includes(`/${selectedYear}/`)
+    if (dYear === selectedYear || inPath) {
+      if (!docsByWorker[doc.worker_id]) {
+        docsByWorker[doc.worker_id] = []
+      }
+      docsByWorker[doc.worker_id].push(doc)
     }
-    docsByWorker[doc.worker_id].push(doc)
   })
 
   return workers.map(worker => {
@@ -231,10 +247,10 @@ export async function getWorkerLegajosDossier(): Promise<WorkerLegajoSummary[]> 
   })
 }
 
-export async function getDossierSummary(): Promise<DossierSummary> {
+export async function getDossierSummary(selectedYear: number = 2026): Promise<DossierSummary> {
   const [companyItems, workerLegajos] = await Promise.all([
-    getCompanyDossier(),
-    getWorkerLegajosDossier()
+    getCompanyDossier(selectedYear),
+    getWorkerLegajosDossier(selectedYear)
   ])
 
   const companyDigitalized = companyItems.filter(i => i.status === 'digitalizado').length
@@ -327,11 +343,31 @@ export async function ingestDocument(payload: IngestDocumentPayload) {
       .eq('code', payload.codeOrWorkerId)
       .maybeSingle()
 
-    if (req) {
+    let reqId = req?.id
+
+    // Si el requisito no está en el catálogo, auto-crearlo para no perder la subida
+    if (!reqId) {
+      const spec = COMPANY_LEGAL_SPECS.find(s => s.code === payload.codeOrWorkerId)
+      const { data: createdReq } = await supabase
+        .from('sst_requirements')
+        .upsert({
+          code: payload.codeOrWorkerId,
+          name: spec?.title || payload.codeOrWorkerId,
+          description: spec?.description || 'Requisito institucional de SST',
+          is_company_level: true,
+          frequency_months: spec?.frequencyMonths || 12
+        }, { onConflict: 'code' })
+        .select('id')
+        .maybeSingle()
+
+      reqId = createdReq?.id
+    }
+
+    if (reqId) {
       const { data, error } = await supabase
         .from('sst_documents')
         .insert({
-          requirement_id: req.id,
+          requirement_id: reqId,
           file_url: payload.filePath,
           issue_date: payload.documentDate || new Date().toISOString().split('T')[0],
           status: 'valid'

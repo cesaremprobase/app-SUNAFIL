@@ -116,3 +116,21 @@ ON public.telegram_bot_sessions FOR ALL
 USING (true) 
 WITH CHECK (true);
 
+-- ==============================================================================
+-- 6. REQUISITOS INSTITUCIONALES DE EMPRESA (Garantizar los 6 en sst_requirements)
+-- ==============================================================================
+DROP POLICY IF EXISTS "Allow all read sst_requirements" ON public.sst_requirements;
+CREATE POLICY "Allow all read sst_requirements" ON public.sst_requirements FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow all insert sst_requirements" ON public.sst_requirements;
+CREATE POLICY "Allow all insert sst_requirements" ON public.sst_requirements FOR INSERT WITH CHECK (true);
+
+INSERT INTO public.sst_requirements (code, name, description, is_company_level, frequency_months) VALUES
+  ('SST-POL-01', 'Política y Objetivos del SGSST', 'Documento firmado por el gerente general que define el compromiso con la seguridad y salud laboral.', true, 12),
+  ('SST-RIS-01', 'Reglamento Interno de SST (RISST)', 'Aprobado por el Comité de SST. De cumplimiento obligatorio para empresas con 20 o más trabajadores.', true, 12),
+  ('SST-IPE-01', 'Matriz IPERC Línea Base', 'Identificación de Peligros, Evaluación de Riesgos y Medidas de Control por puesto de trabajo.', true, 12),
+  ('SST-MAP-01', 'Mapa de Riesgos del Centro Laboral', 'Representación gráfica visible en las instalaciones con las áreas de riesgo y señalética.', true, 12),
+  ('SST-PLA-01', 'Plan y Programa Anual de SST', 'Cronograma documentado de actividades, presupuesto y metas de seguridad del año en curso.', true, 12),
+  ('SST-COM-01', 'Libro de Actas del Comité de SST', 'Acta de instalación del Comité paritario y actas de reuniones ordinarias mensuales.', true, 1)
+ON CONFLICT (code) DO NOTHING;
+

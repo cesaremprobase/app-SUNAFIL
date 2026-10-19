@@ -1,29 +1,67 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { LegalRequirement, WorkerLegajoSummary, DossierSummary } from '../../types/dossier'
 import { DossierHeader } from './DossierHeader'
 import { CompanyDossierView } from './CompanyDossierView'
 import { WorkerLegajosView } from './WorkerLegajosView'
-import { Building2, Users, FileSpreadsheet, ArrowRight } from 'lucide-react'
+import { Building2, Users, FileSpreadsheet, ArrowRight, Calendar } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import Link from 'next/link'
 
 interface DossierTabsContainerProps {
   summary: DossierSummary
   companyRequirements: LegalRequirement[]
   workerLegajos: WorkerLegajoSummary[]
+  selectedYear?: number
 }
 
 export function DossierTabsContainer({
   summary,
   companyRequirements,
-  workerLegajos
+  workerLegajos,
+  selectedYear = 2026
 }: DossierTabsContainerProps) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<'empresa' | 'trabajadores' | 'mtpe'>('empresa')
+
+  const handleYearChange = (year: number) => {
+    router.push(`/expediente?year=${year}`)
+  }
 
   return (
     <div className="space-y-6">
       <DossierHeader summary={summary} />
+
+      {/* Selector de Periodo Anual SUNAFIL (2023, 2024, 2025, 2026) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-gray-200 rounded-xl p-3.5 shadow-xs">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-blue-600" />
+          <span className="text-xs font-bold text-gray-900">Periodo de Inspección:</span>
+          <span className="text-xs text-gray-500">Filtrar evidencias y requerimientos por año</span>
+        </div>
+
+        <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-lg">
+          {[2023, 2024, 2025, 2026].map((yr) => {
+            const isSelected = selectedYear === yr
+            return (
+              <button
+                key={yr}
+                onClick={() => handleYearChange(yr)}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-bold transition-all",
+                  isSelected
+                    ? "bg-white text-blue-700 shadow-xs border border-gray-200"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
+                )}
+              >
+                Año {yr}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       {/* Selector de Pestañas / Módulos de Inspección */}
       <div className="flex border-b border-gray-200 gap-2">
@@ -73,11 +111,11 @@ export function DossierTabsContainer({
       {/* Contenido de la Pestaña Activa */}
       <div>
         {activeTab === 'empresa' && (
-          <CompanyDossierView requirements={companyRequirements} />
+          <CompanyDossierView requirements={companyRequirements} selectedYear={selectedYear} />
         )}
 
         {activeTab === 'trabajadores' && (
-          <WorkerLegajosView legajos={workerLegajos} />
+          <WorkerLegajosView legajos={workerLegajos} selectedYear={selectedYear} />
         )}
 
         {activeTab === 'mtpe' && (

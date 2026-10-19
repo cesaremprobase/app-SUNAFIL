@@ -264,12 +264,17 @@ export interface ParseCaptionResult {
   target: 'worker' | 'company' | 'unknown'
   identifier: string // DNI o Código (ej. 'SST-POL-01')
   docType: string // 'risst', 'emo', 'epp', 'capacitaciones'
+  year: string // '2023', '2024', '2025', '2026'
 }
 
 export function parseCaptionOrText(input: string): ParseCaptionResult {
   const clean = input.trim().toLowerCase()
 
-  if (clean.includes('empresa') || clean.includes('politica') || clean.includes('iperc') || clean.includes('mapa')) {
+  // Extraer año si se especificó (2023, 2024, 2025, 2026), por defecto 2026
+  const yearMatch = clean.match(/\b(202[3-6])\b/)
+  const year = yearMatch ? yearMatch[1] : '2026'
+
+  if (clean.includes('empresa') || clean.includes('politica') || clean.includes('iperc') || clean.includes('mapa') || clean.includes('plan')) {
     let code = 'SST-POL-01'
     let docType = 'politica'
 
@@ -290,7 +295,7 @@ export function parseCaptionOrText(input: string): ParseCaptionResult {
       docType = 'plan'
     }
 
-    return { target: 'company', identifier: code, docType }
+    return { target: 'company', identifier: code, docType, year }
   }
 
   const dniMatch = clean.match(/\b\d{8}\b/)
@@ -308,10 +313,10 @@ export function parseCaptionOrText(input: string): ParseCaptionResult {
       docType = 'risst'
     }
 
-    return { target: 'worker', identifier: dni, docType }
+    return { target: 'worker', identifier: dni, docType, year }
   }
 
-  return { target: 'unknown', identifier: '', docType: '' }
+  return { target: 'unknown', identifier: '', docType: '', year }
 }
 
 export async function saveWorkerDocumentFile({
@@ -320,6 +325,7 @@ export async function saveWorkerDocumentFile({
   docType,
   buffer,
   fileName,
+  year = '2026',
   source = 'telegram'
 }: {
   chatId: number | string
@@ -327,11 +333,12 @@ export async function saveWorkerDocumentFile({
   docType: string
   buffer: Buffer
   fileName: string
+  year?: string
   source?: 'telegram' | 'drive'
 }) {
   const supabase = createAdminClient()
   const ext = fileName.split('.').pop() || 'jpg'
-  const storagePath = `legajos/${worker.id}/${docType}_${Date.now()}.${ext}`
+  const storagePath = `legajos/${year}/${worker.id}/${docType}_${Date.now()}.${ext}`
 
   const { error: uploadError } = await supabase.storage
     .from('sst-documents')
@@ -352,7 +359,8 @@ export async function saveWorkerDocumentFile({
     documentType: docType,
     filePath: storagePath,
     fileName,
-    fileSize: buffer.length
+    fileSize: buffer.length,
+    documentDate: `${year}-01-01`
   })
 
   const docNames: Record<string, string> = {
@@ -474,7 +482,8 @@ export async function processTelegramUpload(
     }
 
     const ext = originalFileName?.split('.').pop() || 'pdf'
-    const storagePath = `empresa/${parsed.identifier}/tg_${Date.now()}.${ext}`
+    const year = parsed.year || '2026'
+    const storagePath = `empresa/${year}/${parsed.identifier}/tg_${Date.now()}.${ext}`
 
     const { error: uploadError } = await supabase.storage
       .from('sst-documents')
@@ -494,7 +503,8 @@ export async function processTelegramUpload(
       codeOrWorkerId: parsed.identifier,
       filePath: storagePath,
       fileName: originalFileName || `doc_empresa_${parsed.identifier}.${ext}`,
-      fileSize: file.buffer.length
+      fileSize: file.buffer.length,
+      documentDate: `${year}-01-01`
     })
 
     const appUrl = getAppUrl()

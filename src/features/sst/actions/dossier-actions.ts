@@ -6,24 +6,33 @@ import { revalidatePath } from 'next/cache'
 import { ingestDocument } from '../services/dossier-service'
 
 export async function uploadAndIngestWorkerDocument(formData: FormData) {
-  const supabase = createAdminClient()
+  // Intentar primero con el cliente de sesión del usuario autenticado para respetar RBAC
+  const userClient = await createClient()
+  const { data: { user } } = await userClient.auth.getUser()
+  const supabase = user ? userClient : createAdminClient()
 
   const workerId = formData.get('workerId') as string
   const documentType = formData.get('documentType') as string
   const documentDate = formData.get('documentDate') as string
+  const year = formData.get('year') ? String(formData.get('year')) : (documentDate ? documentDate.slice(0, 4) : '2026')
   const file = formData.get('file') as File
 
   if (!workerId || !file || !documentType) {
     throw new Error('Faltan campos obligatorios para subir el documento.')
   }
 
-  const fileExt = file.name.split('.').pop()
+  const fileExt = file.name.split('.').pop() || 'pdf'
   const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-  const storagePath = `legajos/${workerId}/${documentType}_${Date.now()}.${fileExt}`
+  const storagePath = `legajos/${year}/${workerId}/${documentType}_${Date.now()}.${fileExt}`
+
+  const arrayBuffer = await file.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+  const contentType = file.type || (fileExt === 'pdf' ? 'application/pdf' : 'image/jpeg')
 
   const { error: uploadError } = await supabase.storage
     .from('sst-documents')
-    .upload(storagePath, file, {
+    .upload(storagePath, buffer, {
+      contentType,
       cacheControl: '3600',
       upsert: true
     })
@@ -42,7 +51,7 @@ export async function uploadAndIngestWorkerDocument(formData: FormData) {
     filePath: storagePath,
     fileName: sanitizedName,
     fileSize: file.size,
-    documentDate: documentDate || undefined
+    documentDate: documentDate || `${year}-01-01`
   })
 
   revalidatePath('/expediente')
@@ -54,22 +63,31 @@ export async function uploadAndIngestWorkerDocument(formData: FormData) {
 }
 
 export async function uploadAndIngestCompanyDocument(formData: FormData) {
-  const supabase = createAdminClient()
+  // Intentar primero con el cliente de sesión del usuario autenticado
+  const userClient = await createClient()
+  const { data: { user } } = await userClient.auth.getUser()
+  const supabase = user ? userClient : createAdminClient()
 
   const requirementCode = formData.get('requirementCode') as string
+  const year = formData.get('year') ? String(formData.get('year')) : '2026'
   const file = formData.get('file') as File
 
   if (!requirementCode || !file) {
     throw new Error('Faltan campos obligatorios para el documento institucional.')
   }
 
-  const fileExt = file.name.split('.').pop()
+  const fileExt = file.name.split('.').pop() || 'pdf'
   const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-  const storagePath = `empresa/${requirementCode}/${Date.now()}.${fileExt}`
+  const storagePath = `empresa/${year}/${requirementCode}/${Date.now()}.${fileExt}`
+
+  const arrayBuffer = await file.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+  const contentType = file.type || (fileExt === 'pdf' ? 'application/pdf' : 'image/jpeg')
 
   const { error: uploadError } = await supabase.storage
     .from('sst-documents')
-    .upload(storagePath, file, {
+    .upload(storagePath, buffer, {
+      contentType,
       cacheControl: '3600',
       upsert: true
     })
@@ -85,7 +103,8 @@ export async function uploadAndIngestCompanyDocument(formData: FormData) {
     codeOrWorkerId: requirementCode,
     filePath: storagePath,
     fileName: sanitizedName,
-    fileSize: file.size
+    fileSize: file.size,
+    documentDate: `${year}-01-01`
   })
 
   revalidatePath('/expediente')

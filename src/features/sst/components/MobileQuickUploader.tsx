@@ -16,7 +16,8 @@ import {
   GraduationCap, 
   HardHat,
   Filter,
-  Loader2
+  Loader2,
+  Calendar
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -100,6 +101,7 @@ export function MobileQuickUploader({
   )
   const [searchTerm, setSearchTerm] = useState('')
   const [filterMissingOnly, setFilterMissingOnly] = useState(false)
+  const [selectedYear, setSelectedYear] = useState<number>(2026)
   const [uploadingTargetId, setUploadingTargetId] = useState<string | null>(null)
 
   const currentAreaConfig = AREAS.find(a => a.id === activeArea) || AREAS[0]
@@ -236,6 +238,7 @@ export function MobileQuickUploader({
       const formData = new FormData()
       formData.append('workerId', workerId)
       formData.append('documentType', typeMapping[activeArea] || activeArea)
+      formData.append('year', String(selectedYear))
       formData.append('file', optimizedFile)
 
       const res = await fetch('/api/upload/worker', {
@@ -267,6 +270,7 @@ export function MobileQuickUploader({
       const optimizedFile = await compressImageIfNeeded(file)
       const formData = new FormData()
       formData.append('requirementCode', requirementCode)
+      formData.append('year', String(selectedYear))
       formData.append('file', optimizedFile)
 
       const res = await fetch('/api/upload/company', {
@@ -311,6 +315,30 @@ export function MobileQuickUploader({
         <p className="text-xs text-gray-500 mt-0.5">
           Toma fotos o sube desde Google Drive directo al área y trabajador que corresponda.
         </p>
+      </div>
+
+      {/* Selector de Año de Inspección (2023, 2024, 2025, 2026) */}
+      <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl p-2.5 shadow-xs">
+        <div className="flex items-center gap-1.5">
+          <Calendar className="w-3.5 h-3.5 text-blue-600" />
+          <span className="text-xs font-bold text-gray-800">Año de Inspección:</span>
+        </div>
+        <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg">
+          {[2023, 2024, 2025, 2026].map(yr => (
+            <button
+              key={yr}
+              onClick={() => setSelectedYear(yr)}
+              className={cn(
+                "px-2.5 py-1 text-xs font-bold rounded-md transition-all",
+                selectedYear === yr
+                  ? "bg-white text-blue-700 shadow-xs border border-gray-200"
+                  : "text-gray-500 hover:text-gray-800"
+              )}
+            >
+              {yr}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Selector Horizontal de Áreas (Tabs adaptados para móvil) */}

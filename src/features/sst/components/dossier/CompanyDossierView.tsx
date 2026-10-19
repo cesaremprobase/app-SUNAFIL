@@ -19,11 +19,13 @@ import { toast } from 'sonner'
 
 interface CompanyDossierViewProps {
   requirements: LegalRequirement[]
+  selectedYear?: number
 }
 
-export function CompanyDossierView({ requirements }: CompanyDossierViewProps) {
+export function CompanyDossierView({ requirements, selectedYear = 2026 }: CompanyDossierViewProps) {
   const [selectedReq, setSelectedReq] = useState<LegalRequirement | null>(null)
   const [file, setFile] = useState<File | null>(null)
+  const [uploadYear, setUploadYear] = useState<number>(selectedYear)
   const [isUploading, setIsUploading] = useState(false)
 
   const handleUpload = async (e: React.FormEvent) => {
@@ -37,10 +39,11 @@ export function CompanyDossierView({ requirements }: CompanyDossierViewProps) {
       setIsUploading(true)
       const formData = new FormData()
       formData.append('requirementCode', selectedReq.code)
+      formData.append('year', String(uploadYear))
       formData.append('file', file)
 
       await uploadAndIngestCompanyDocument(formData)
-      toast.success(`Documento "${selectedReq.title}" digitalizado correctamente`)
+      toast.success(`Documento "${selectedReq.title}" (${uploadYear}) digitalizado correctamente`)
       setSelectedReq(null)
       setFile(null)
     } catch (err: any) {
@@ -174,6 +177,29 @@ export function CompanyDossierView({ requirements }: CompanyDossierViewProps) {
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600 space-y-1">
               <p><span className="font-semibold text-gray-900">Requisito SUNAFIL:</span> {selectedReq?.legalBasis}</p>
               <p className="text-gray-500">Sube el documento escaneado con las firmas y sellos correspondientes.</p>
+            </div>
+
+            {/* Selector de Año del Documento */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-gray-700">
+                Año / Periodo del documento:
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {[2023, 2024, 2025, 2026].map(yr => (
+                  <button
+                    key={yr}
+                    type="button"
+                    onClick={() => setUploadYear(yr)}
+                    className={`py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                      uploadYear === yr 
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs' 
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {yr}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="space-y-2">

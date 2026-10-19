@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
     const workerId = formData.get('workerId') as string
     const documentType = formData.get('documentType') as string
     const documentDate = formData.get('documentDate') as string | null
+    const year = formData.get('year') ? String(formData.get('year')) : (documentDate ? documentDate.slice(0, 4) : '2026')
     const file = formData.get('file') as File
 
     if (!workerId || !file || !documentType) {
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     const fileExt = file.name.split('.').pop() || 'jpg'
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-    const storagePath = `legajos/${workerId}/${documentType}_${Date.now()}.${fileExt}`
+    const storagePath = `legajos/${year}/${workerId}/${documentType}_${Date.now()}.${fileExt}`
 
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)

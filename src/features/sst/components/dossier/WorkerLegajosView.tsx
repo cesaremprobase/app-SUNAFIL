@@ -23,9 +23,10 @@ import { toast } from 'sonner'
 
 interface WorkerLegajosViewProps {
   legajos: WorkerLegajoSummary[]
+  selectedYear?: number
 }
 
-export function WorkerLegajosView({ legajos }: WorkerLegajosViewProps) {
+export function WorkerLegajosView({ legajos, selectedYear = 2026 }: WorkerLegajosViewProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'incomplete' | 'complete'>('all')
 
@@ -35,7 +36,8 @@ export function WorkerLegajosView({ legajos }: WorkerLegajosViewProps) {
     req: WorkerLegajoRequirement
   } | null>(null)
   const [file, setFile] = useState<File | null>(null)
-  const [documentDate, setDocumentDate] = useState(new Date().toISOString().split('T')[0])
+  const [uploadYear, setUploadYear] = useState<number>(selectedYear)
+  const [documentDate, setDocumentDate] = useState(`${selectedYear}-01-15`)
   const [isUploading, setIsUploading] = useState(false)
 
   // Filtrado
@@ -68,11 +70,12 @@ export function WorkerLegajosView({ legajos }: WorkerLegajosViewProps) {
       const formData = new FormData()
       formData.append('workerId', uploadTarget.worker.workerId)
       formData.append('documentType', uploadTarget.req.type)
+      formData.append('year', String(uploadYear))
       formData.append('documentDate', documentDate)
       formData.append('file', file)
 
       await uploadAndIngestWorkerDocument(formData)
-      toast.success(`${uploadTarget.req.label} guardado para ${uploadTarget.worker.workerName}`)
+      toast.success(`${uploadTarget.req.label} (${uploadYear}) guardado para ${uploadTarget.worker.workerName}`)
       setUploadTarget(null)
       setFile(null)
     } catch (err: any) {
@@ -295,6 +298,32 @@ export function WorkerLegajosView({ legajos }: WorkerLegajosViewProps) {
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600 space-y-1">
               <p className="font-semibold text-gray-900">Requisito Legal:</p>
               <p>{uploadTarget?.req.legalBasis}</p>
+            </div>
+
+            {/* Selector de Año del Documento */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-gray-700">
+                Año / Periodo de Inspección:
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {[2023, 2024, 2025, 2026].map(yr => (
+                  <button
+                    key={yr}
+                    type="button"
+                    onClick={() => {
+                      setUploadYear(yr)
+                      setDocumentDate(`${yr}-01-15`)
+                    }}
+                    className={`py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                      uploadYear === yr 
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs' 
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {yr}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>

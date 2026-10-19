@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData()
 
     const requirementCode = formData.get('requirementCode') as string
+    const year = formData.get('year') ? String(formData.get('year')) : '2026'
     const file = formData.get('file') as File
 
     if (!requirementCode || !file) {
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const fileExt = file.name.split('.').pop() || 'pdf'
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-    const storagePath = `empresa/${requirementCode}/${Date.now()}.${fileExt}`
+    const storagePath = `empresa/${year}/${requirementCode}/${Date.now()}.${fileExt}`
 
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
       filePath: storagePath,
       fileName: sanitizedName,
       fileSize: file.size,
+      documentDate: `${year}-01-01`
     })
 
     return NextResponse.json({ ok: true, filePath: storagePath })

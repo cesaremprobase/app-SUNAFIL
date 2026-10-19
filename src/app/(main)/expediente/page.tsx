@@ -5,11 +5,20 @@ import {
 } from '@/features/sst/services/dossier-service'
 import { DossierTabsContainer } from '@/features/sst/components/dossier/DossierTabsContainer'
 
-export default async function ExpedientePage() {
+export const dynamic = 'force-dynamic'
+
+export default async function ExpedientePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ year?: string }>
+}) {
+  const params = await (searchParams || Promise.resolve({}))
+  const selectedYear = params.year ? parseInt(params.year, 10) : 2026
+
   const [summary, companyRequirements, workerLegajos] = await Promise.all([
-    getDossierSummary(),
-    getCompanyDossier(),
-    getWorkerLegajosDossier()
+    getDossierSummary(selectedYear),
+    getCompanyDossier(selectedYear),
+    getWorkerLegajosDossier(selectedYear)
   ])
 
   return (
@@ -19,6 +28,7 @@ export default async function ExpedientePage() {
           summary={summary}
           companyRequirements={companyRequirements}
           workerLegajos={workerLegajos}
+          selectedYear={selectedYear}
         />
       </div>
     </div>
